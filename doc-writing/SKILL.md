@@ -30,11 +30,12 @@ updated: 2025-01-17
 
 | Skill | 关系 | 说明 |
 |-------|------|------|
+| **requirement-discovery** | 上一步 | 需求调研完成后，开始撰写文档 |
 | **doc-review** | 下一步 | 文档撰写完成后，使用 doc-review 进行评审 |
 | **development** | 后续 | 文档评审通过后，进入开发阶段 |
 | **code-review** | 后续 | 开发完成后，进行代码评审 |
 
-**工作流**：`doc-writing` → `doc-review` → `development` → `code-review`
+**工作流**：`requirement-discovery` → `doc-writing` → `doc-review` → `development` → `code-review`
 
 ---
 
