@@ -29,7 +29,6 @@ updated: 2025-01-17
 
 | Skill | 关系 | 说明 |
 |-------|------|------|
-| **requirement-discovery** | 前置 | 需求调研是整个流程的起点 |
 | **doc-writing** | 前置 | 评审时对照需求文档 |
 | **doc-review** | 前置 | 确保需求已评审通过 |
 | **development** | 上一步 | 评审开发完成的代码 |
