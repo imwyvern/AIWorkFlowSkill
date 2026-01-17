@@ -1,7 +1,7 @@
 ---
 name: 需求技术文档撰写
 description: 帮助撰写完整、规范、可执行的需求技术文档，包括 PRD、技术方案、API 设计等
-version: 1.0.0
+version: 1.1.0
 updated: 2025-01-17
 ---
 
