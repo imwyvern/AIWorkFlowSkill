@@ -1,7 +1,7 @@
 ---
 name: 需求文档评审
 description: 系统性评审需求文档的完整性、一致性、可行性，在开发前发现问题
-version: 1.0.0
+version: 1.1.0
 updated: 2025-01-17
 ---
 
@@ -28,11 +28,12 @@ updated: 2025-01-17
 
 | Skill | 关系 | 说明 |
 |-------|------|------|
+| **requirement-discovery** | 前置 | 需求调研完成后撰写文档再评审 |
 | **doc-writing** | 上一步 | 使用 doc-writing 撰写的文档需要评审 |
 | **development** | 下一步 | 评审通过后进入开发阶段 |
 | **code-review** | 后续 | 开发完成后进行代码评审 |
 
-**工作流**：`doc-writing` → `doc-review` → `development` → `code-review`
+**工作流**：`requirement-discovery` → `doc-writing` → `doc-review` → `development` → `code-review`
 
 ---
 
