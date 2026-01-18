@@ -1,7 +1,7 @@
 ---
 name: 通用 Skill 使用指南
 description: 全局开发流程 Skill 体系总览和使用说明
-version: 1.2.0
+version: 1.3.0
 updated: 2026-01-17
 ---
 
@@ -164,6 +164,7 @@ updated: 2026-01-17
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| 1.3.0 | 2026-01-17 | 新增文档管理规范章节; code-review添加存档决策 |
 | 1.2.0 | 2026-01-17 | development skill 新增 Bug修复章节; 移除emoji提升稳定性 |
 | 1.1.0 | 2025-01-17 | 新增 requirement-discovery skill |
 | 1.0.0 | 2025-01-17 | 初始版本: 4个核心Skill + 速查表 |
