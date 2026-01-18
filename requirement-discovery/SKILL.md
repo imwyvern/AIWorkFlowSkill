@@ -1,8 +1,8 @@
 ---
 name: 需求调研与发现
 description: 帮助识别、评估和验证需求，在开始设计之前确保方向正确
-version: 1.2.0
-updated: 2026-01-17
+version: 1.4.0
+updated: 2026-01-18
 ---
 
 # 需求调研与发现 Skill

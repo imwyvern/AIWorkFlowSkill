@@ -1,8 +1,8 @@
 ---
 name: 代码评审
 description: 系统性地进行代码评审，检查代码质量、安全性、性能和可维护性
-version: 1.3.0
-updated: 2026-01-17
+version: 1.4.0
+updated: 2026-01-18
 ---
 
 # 代码评审 Skill
@@ -42,6 +42,13 @@ updated: 2026-01-17
 - "帮我 review 这个代码"
 - "检查这个 PR"
 - "看看这个实现有没有问题"
+
+---
+
+## 复杂评审的会话记录（可选）
+
+当评审范围较大或涉及多处上下文时，可启用会话记录，避免遗漏与重复。
+参考模板: `AIWorkFlowSkill/development/references/session-management.md`
 
 ---
 

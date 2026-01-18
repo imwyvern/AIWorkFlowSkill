@@ -1,8 +1,8 @@
 ---
 name: 需求文档评审
 description: 系统性评审需求文档的完整性、一致性、可行性，在开发前发现问题
-version: 1.2.0
-updated: 2026-01-17
+version: 1.4.0
+updated: 2026-01-18
 ---
 
 # 需求文档评审 Skill
@@ -43,6 +43,13 @@ updated: 2026-01-17
 - "检查一下这个 PRD 有没有问题"
 - "这个技术方案靠谱吗"
 - "看看这个 AI 功能设计有没有问题"
+
+---
+
+## 复杂评审的会话记录（可选）
+
+当评审范围较大或涉及多处上下文时，可启用会话记录，避免遗漏与重复。
+参考模板: `AIWorkFlowSkill/development/references/session-management.md`
 
 ---
 

@@ -1,8 +1,8 @@
 ---
 name: 开发实现
-description: 指导高质量的代码开发，遵循 SOLID 原则，规范的分支管理和提交流程
-version: 1.3.0
-updated: 2026-01-17
+description: 指导高质量的代码开发，遵循 SOLID 原则，规范的分支管理和提交流程，支持会话持久化与恢复
+version: 1.4.0
+updated: 2026-01-18
 ---
 
 # 开发实现 Skill
@@ -583,6 +583,87 @@ try {
 3. **更新进度统计**
 4. **记录阻塞问题** (如有)
 
+### 会话持久化（复杂任务）
+
+> 基于 Manus 的 Context Engineering 理念：Context Window = RAM，Filesystem = Disk。
+
+#### 核心理念
+
+```
+Context Window = RAM (易失性, 有限)
+Filesystem = Disk (持久性, 无限)
+
+→ 重要信息必须写入磁盘
+```
+
+#### 自动启用规则
+- 硬触发（任一）：Bug修复/调试/排查；研究/对比/方案选型；跨 >=3 文件；外部系统变更（API/DB/第三方）
+- 软触发：预计 >30 分钟；任务拆解 >=3 步；需要多轮沟通/确认
+- 灰区判断：命中 2 项软触发 -> 直接启用；仅 1 项 -> 询问一次是否启用
+- 动态升阶：出现错误/失败尝试，或多次查看/搜索仍未锁定方案 -> 立即启用
+- 用户覆盖：用户明确表示"不需要会话记录" -> 跳过
+
+#### 会话文件
+
+| 文件 | 用途 | 更新时机 |
+|------|------|---------|
+| `task_plan.md` | 阶段、进度、决策 | 完成每个阶段后 |
+| `findings.md` | 研究、发现 | 每次重要发现后 |
+| `progress.md` | 会话日志、错误 | 整个会话过程中 |
+
+默认项目根目录；如项目已有 `docs/_session/` 规范则使用之。
+
+#### 自动化脚本
+
+```bash
+# 初始化三文件
+./AIWorkFlowSkill/development/scripts/init-session.sh "任务名"
+
+# 会话恢复（上下文清除后恢复未同步内容）
+python3 ./AIWorkFlowSkill/development/scripts/session-catchup.py "$(pwd)"
+
+# 检查任务完成度
+./AIWorkFlowSkill/development/scripts/check-complete.sh
+```
+
+#### 3-Strike Error Protocol
+
+```
+尝试 1: 诊断 & 修复
+  → 仔细阅读错误，识别根因，应用针对性修复
+
+尝试 2: 替代方案
+  → 同样错误? 尝试不同方法/工具/库
+  → 永不重复完全相同的失败操作
+
+尝试 3: 更广泛的反思
+  → 质疑假设，搜索解决方案
+  → 考虑更新计划
+
+3 次失败后: 升级给用户
+  → 解释尝试过什么，分享具体错误，请求指导
+```
+
+#### 5-Question Reboot Test
+
+上下文恢复后，验证这 5 个问题能否回答：
+
+| 问题 | 答案来源 |
+|------|---------|
+| 我在哪? | task_plan.md 中的当前阶段 |
+| 我要去哪? | 剩余阶段 |
+| 目标是什么? | 计划中的 Goal 声明 |
+| 我学到了什么? | findings.md |
+| 我做了什么? | progress.md |
+
+#### 2-Action Rule
+
+> 每 2 次查看/浏览/搜索操作后，**立即**将关键发现保存到 findings.md。
+
+这防止视觉/多模态信息丢失。
+
+模板与完整规则见 `AIWorkFlowSkill/development/references/session-management.md`。
+
 ### 任务状态标记
 
 | 状态 | 标记 | 说明 |
@@ -673,6 +754,10 @@ try {
 "这个功能不对"
 "为什么这里报错"
 ```
+
+### 会话持久化要求
+
+Bug修复必须启用会话持久化，记录尝试与错误，避免重复失败。模板见 `AIWorkFlowSkill/development/references/session-management.md`。
 
 ### 10.1 Bug修复流程
 

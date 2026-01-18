@@ -1,8 +1,8 @@
 ---
 name: 通用 Skill 使用指南
-description: 全局开发流程 Skill 体系总览和使用说明
-version: 1.3.0
-updated: 2026-01-17
+description: 全局开发流程 Skill 体系总览和使用说明，支持会话持久化与恢复
+version: 1.4.0
+updated: 2026-01-18
 ---
 
 # 通用 Skill 使用指南
@@ -53,6 +53,7 @@ updated: 2026-01-17
 | **doc-writing** | 撰写需求文档、技术方案、API设计 | "帮我写需求文档" |
 | **doc-review** | 评审需求文档，发现问题 | "评审这个PRD" |
 | **development** | 开发实现、Bug修复、进度追踪 | "帮我实现这个功能" / "看看这个bug" |
+| **testing** | 测试策略、用例设计、覆盖率分析 | "帮我设计测试用例" |
 | **code-review** | 代码评审，保证质量 | "review这个代码" |
 
 ---
@@ -144,18 +145,33 @@ updated: 2026-01-17
 ## Skill 文件位置
 
 ```
-~/.gemini/skills/
-|-- README.md               <- 本文件 (使用指南)
+AIWorkFlowSkill/              <- 主仓库 (建议)
+|-- README.md                 <- 本文件 (使用指南)
 |-- requirement-discovery/
-|   |-- SKILL.md            <- 需求调研与发现
+|   |-- SKILL.md              <- 需求调研与发现
+|   |-- references/           <- 模板库
 |-- doc-writing/
-|   |-- SKILL.md            <- 需求文档撰写
+|   |-- SKILL.md              <- 需求文档撰写
+|   |-- references/           <- Mermaid图表等参考
 |-- doc-review/
-|   |-- SKILL.md            <- 需求文档评审
+|   |-- SKILL.md              <- 需求文档评审
+|   |-- references/           <- 检查清单
 |-- development/
-|   |-- SKILL.md            <- 开发实现 + Bug修复
+|   |-- SKILL.md              <- 开发实现 + Bug修复
+|   |-- references/
+|   |   |-- session-management.md  <- 会话持久化规范
+|   |-- scripts/
+|       |-- init-session.sh   <- 初始化三文件
+|       |-- check-complete.sh <- 检查完成度
+|       |-- session-catchup.py <- 会话恢复
+|-- testing/                  <- [NEW]
+|   |-- SKILL.md              <- 测试策略与实践
+|   |-- references/           <- 测试用例模板
 |-- code-review/
-    |-- SKILL.md            <- 代码评审
+    |-- SKILL.md              <- 代码评审
+    |-- references/           <- 检查清单
+
+~/.gemini/skills/             <- 软链接到 AIWorkFlowSkill/
 ```
 
 ---
@@ -164,6 +180,8 @@ updated: 2026-01-17
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| 1.4.1 | 2026-01-18 | 新增 testing skill; 各skill添加references目录; 统一版本号 |
+| 1.4.0 | 2026-01-18 | 新增会话持久化与恢复; 3-Strike Error Protocol; 5-Question Reboot Test; 自动化脚本 |
 | 1.3.0 | 2026-01-17 | 新增文档管理规范; 渐进式讨论快速确认机制; code-review存档决策 |
 | 1.2.0 | 2026-01-17 | development skill 新增 Bug修复章节; 移除emoji提升稳定性 |
 | 1.1.0 | 2025-01-17 | 新增 requirement-discovery skill |
@@ -176,8 +194,25 @@ updated: 2026-01-17
 如需扩展或修改 Skill:
 
 1. **添加项目特定规范**: 在项目的 `.agent/skills/` 中创建
-2. **修改全局规范**: 直接编辑 `~/.gemini/skills/` 中的文件
+2. **修改全局规范**: 编辑 `AIWorkFlowSkill/` 中的文件
 3. **添加新 Skill**: 创建新目录和 SKILL.md 文件
+
+### 版本同步
+
+建议以 `AIWorkFlowSkill/` 为主仓库，`~/.gemini/skills/` 使用软链接：
+
+```bash
+# 备份原有 skills
+mv ~/.gemini/skills ~/.gemini/skills.backup
+
+# 创建软链接
+ln -s /path/to/AIWorkFlowSkill ~/.gemini/skills
+
+# 或者选择性链接核心5个skill
+for skill in requirement-discovery doc-writing doc-review development code-review; do
+  ln -sf /path/to/AIWorkFlowSkill/$skill ~/.gemini/skills/$skill
+done
+```
 
 ---
 
