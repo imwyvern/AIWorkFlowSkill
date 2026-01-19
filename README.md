@@ -1,8 +1,8 @@
 ---
 name: 通用 Skill 使用指南
 description: 全局开发流程 Skill 体系总览和使用说明，支持会话持久化与恢复
-version: 1.4.0
-updated: 2026-01-18
+version: 1.5.0
+updated: 2026-01-19
 ---
 
 # 通用 Skill 使用指南
@@ -135,10 +135,33 @@ updated: 2026-01-18
 - 开发严格遵循 SOLID 原则
 - 代码评审检查 SOLID 合规
 
-### 5. 文档驱动 (新增)
+### 5. 文档驱动
 - Bug修复追溯相关文档
 - 发现文档问题及时反馈
 - 形成文档-代码闭环
+
+---
+
+## 集成工具
+
+本 Skill 体系集成了来自 [guo-yu/skills](https://github.com/guo-yu/skills) 的实用工具:
+
+| 工具 | 用途 | 使用方式 |
+|------|------|---------|
+| **port-allocator** | 多项目端口管理，避免冲突 | `/port-allocator` |
+| **skill-i18n** | 文档多语言翻译 | `/skill-i18n` |
+| **skill-permissions** | 一键授权常用命令 | `/skill-permissions allow development` |
+
+### 安装集成工具
+
+```bash
+# 克隆 guo-yu/skills
+git clone https://github.com/guo-yu/skills.git ~/Codes/skills
+
+# 创建软链接
+ln -sf ~/Codes/skills/skill-i18n ~/.gemini/skills/skill-i18n
+ln -sf ~/Codes/skills/port-allocator ~/.gemini/skills/port-allocator
+```
 
 ---
 
@@ -180,6 +203,7 @@ AIWorkFlowSkill/              <- 主仓库 (建议)
 
 | 版本 | 日期 | 更新内容 |
 |------|------|---------|
+| 1.5.0 | 2026-01-19 | 集成 guo-yu/skills 工具(port-allocator, skill-i18n, skill-permissions); 新增危险命令阻止列表; 新增文档国际化支持 |
 | 1.4.1 | 2026-01-18 | 新增 testing skill; 各skill添加references目录; 统一版本号 |
 | 1.4.0 | 2026-01-18 | 新增会话持久化与恢复; 3-Strike Error Protocol; 5-Question Reboot Test; 自动化脚本 |
 | 1.3.0 | 2026-01-17 | 新增文档管理规范; 渐进式讨论快速确认机制; code-review存档决策 |

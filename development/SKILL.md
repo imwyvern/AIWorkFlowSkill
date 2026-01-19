@@ -1,8 +1,8 @@
 ---
 name: 开发实现
 description: 指导高质量的代码开发，遵循 SOLID 原则，规范的分支管理和提交流程，支持会话持久化与恢复
-version: 1.4.0
-updated: 2026-01-18
+version: 1.5.0
+updated: 2026-01-19
 ---
 
 # 开发实现 Skill
@@ -212,6 +212,25 @@ app/
 - 每任务 1-4 小时
 - 可独立测试
 - 依赖关系明确
+
+#### 1.4 开发工具（可选）
+
+**端口管理** (多项目开发时推荐):
+```bash
+# 为当前项目分配端口
+/port-allocator
+
+# 查看所有端口分配
+/port-allocator list
+```
+
+**Skill 权限配置** (避免重复确认命令):
+```bash
+# 一键授权 development skill 的常用命令
+/skill-permissions allow development
+```
+
+> 工具来源: [guo-yu/skills](https://github.com/guo-yu/skills)
 
 ---
 

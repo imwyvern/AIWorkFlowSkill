@@ -1,8 +1,8 @@
 ---
 name: 需求文档评审
 description: 系统性评审需求文档的完整性、一致性、可行性，在开发前发现问题
-version: 1.4.0
-updated: 2026-01-18
+version: 1.5.0
+updated: 2026-01-19
 ---
 
 # 需求文档评审 Skill

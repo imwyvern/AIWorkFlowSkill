@@ -1,8 +1,8 @@
 ---
 name: 代码评审
 description: 系统性地进行代码评审，检查代码质量、安全性、性能和可维护性
-version: 1.4.0
-updated: 2026-01-18
+version: 1.5.0
+updated: 2026-01-19
 ---
 
 # 代码评审 Skill
@@ -130,6 +130,19 @@ const query = `SELECT * FROM users WHERE id = ${userId}`;
 const query = 'SELECT * FROM users WHERE id = ?';
 db.query(query, [userId]);
 ```
+
+**危险命令阻止列表** (代码/脚本中禁止出现):
+
+| 类型 | 阻止的命令 | 原因 |
+|------|-----------|------|
+| 文件操作 | `rm -rf *`, `rm *` | 递归删除，数据丢失风险 |
+| 权限提升 | `sudo *`, `chmod 777 *` | 越权操作 |
+| 进程操作 | `kill -9 *`, `pkill *` | 影响系统稳定性 |
+| 远程执行 | `curl * \| bash`, `wget * \| sh` | 远程代码执行风险 |
+| 动态执行 | `eval *`, `exec *` | 代码注入风险 |
+| Git 危险操作 | `git push --force *`, `git reset --hard *` | 数据丢失风险 |
+
+> 来源: [guo-yu/skills/skill-permissions](https://github.com/guo-yu/skills)
 
 #### 4. 性能 [!]
 

@@ -1,8 +1,8 @@
 ---
 name: 测试策略与实践
 description: 指导测试策略制定、用例设计、覆盖率分析，确保代码质量
-version: 1.4.0
-updated: 2026-01-18
+version: 1.5.0
+updated: 2026-01-19
 ---
 
 # 测试策略与实践 Skill
