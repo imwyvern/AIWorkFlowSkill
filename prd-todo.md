@@ -36,7 +36,7 @@
 - ✅ commit 后自动匹配 PRD item 并跑 checker
 - ✅ review P0/P1 自动转 prd-items.yaml bugfix item
 - ✅ 接入 watchdog 触发 + status-sync 推进
-- nudge 带具体失败原因（而非泛泛"继续推进"）
+- ✅ nudge 带具体失败原因（而非泛泛"继续推进"）
 
 ## compact_prompt 升级
 - 加入 prd-todo.md 引用（compact 后不丢任务上下文）
