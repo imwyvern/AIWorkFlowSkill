@@ -45,4 +45,4 @@
 - ✅ Codex 完成任务后必须更新 prd-todo.md 标记 ✅
 
 ## 全面 review
-- 双路 review (Claude + Codex) 直到 P0/P1 = 0
+- ✅ 双路 review (Claude + Codex) 直到 P0/P1 = 0
