@@ -1,10 +1,10 @@
 {
   "status": "working",
-  "context_num": 34,
-  "head": "2b2df7b",
-  "commit_msg": "test(ios): stabilize acceptance checks and jest asyncstorage mock",
-  "commit_time": 1770827665,
-  "commits_30m": 1,
-  "working_no_commit": 0,
-  "last_check": 1770828015
+  "context_num": 40,
+  "head": "9bf9fad",
+  "commit_msg": "fix(keyboard): harden 30mb memory guard reclaim throttling",
+  "commit_time": 1770830839,
+  "commits_30m": 0,
+  "working_no_commit": 2,
+  "last_check": 1770835807
 }

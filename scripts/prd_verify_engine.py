@@ -15,6 +15,7 @@ import copy
 import datetime as dt
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -193,18 +194,30 @@ def run_check(project_dir: Path, check: dict[str, Any]) -> dict[str, Any]:
             result["detail"] = f"matched={matched} path={rel}"
 
         elif check_type == "command":
-            command = str(check.get("command", "")).strip()
-            if not command:
+            raw_command = check.get("command", "")
+            if isinstance(raw_command, list):
+                command_list = [str(part) for part in raw_command if str(part).strip()]
+            else:
+                command_list = []
+            command = str(raw_command).strip() if not isinstance(raw_command, list) else " ".join(command_list)
+            if not command and not command_list:
                 raise ValueError("missing command")
             timeout_sec = int(check.get("timeout_sec", 30))
             expect_exit = as_list(check.get("expect_exit", [0]))
             expect_exit_codes = {int(x) for x in expect_exit}
             cwd_rel = str(check.get("cwd", "")).strip()
             cwd = project_dir / cwd_rel if cwd_rel else project_dir
+            use_shell = bool(check.get("shell", True))
+            # SECURITY: command checks come from repository-maintained prd-items.yaml (trusted input).
+            # If needed, set `shell: false` in a check to run with argument mode.
+            if use_shell:
+                run_args: Any = command
+            else:
+                run_args = command_list if command_list else shlex.split(command)
             proc = subprocess.run(
-                command,
+                run_args,
                 cwd=str(cwd),
-                shell=True,
+                shell=use_shell,
                 capture_output=True,
                 text=True,
                 timeout=timeout_sec,

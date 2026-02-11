@@ -22,6 +22,34 @@ normalize_int() {
     val=$(echo "$1" | tr -dc '0-9')
     echo "${val:-0}"
 }
+
+sanitize() {
+    echo "$1" | tr -cd 'a-zA-Z0-9_-'
+}
+
+resolve_window_from_safe() {
+    local safe="$1"
+    local tmux_bin="/opt/homebrew/bin/tmux"
+    local session_name="autopilot"
+    local windows window_name window_safe
+
+    if [ ! -x "$tmux_bin" ]; then
+        echo "$safe"
+        return 0
+    fi
+
+    windows=$("$tmux_bin" list-windows -t "$session_name" -F '#{window_name}' 2>/dev/null || true)
+    while IFS= read -r window_name; do
+        [ -n "$window_name" ] || continue
+        window_safe=$(sanitize "$window_name")
+        if [ "$window_safe" = "$safe" ]; then
+            echo "$window_name"
+            return 0
+        fi
+    done <<< "$windows"
+
+    echo "$safe"
+}
 STATE_DIR="$HOME/.autopilot/state"
 COMMIT_COUNT_DIR="$STATE_DIR/watchdog-commits"
 LOG="$HOME/.autopilot/logs/watchdog.log"
@@ -136,7 +164,16 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     [ -f "$trigger_file" ] || continue
 
     safe=$(basename "$trigger_file" | sed 's/review-trigger-//')
-    project_dir=$(cat "$trigger_file")
+    trigger_payload=$(cat "$trigger_file" 2>/dev/null || echo "")
+    project_dir="$trigger_payload"
+    window=""
+    if command -v jq >/dev/null 2>&1 && echo "$trigger_payload" | jq -e . >/dev/null 2>&1; then
+        parsed_project_dir=$(echo "$trigger_payload" | jq -r '.project_dir // empty' 2>/dev/null || echo "")
+        parsed_window=$(echo "$trigger_payload" | jq -r '.window // empty' 2>/dev/null || echo "")
+        [ -n "$parsed_project_dir" ] && project_dir="$parsed_project_dir"
+        [ -n "$parsed_window" ] && window="$parsed_window"
+    fi
+    [ -n "$window" ] || window=$(resolve_window_from_safe "$safe")
 
     if [ ! -d "$project_dir" ]; then
         log "⚠️ ${safe}: project dir not found: ${project_dir}"
@@ -152,7 +189,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     review_output_file="${STATE_DIR}/layer2-review-${safe}.txt"
 
     # M-5: 非 idle 不消费 trigger，留待下轮
-    if ! is_codex_idle "$safe"; then
+    if ! is_codex_idle "$window"; then
         log "⏭ ${safe}: Codex not idle, keep trigger for next round"
         continue
     fi
@@ -195,7 +232,6 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
 
     layer2_completed=false
     layer2_issues=""
-    window="$safe"
 
     if [ -n "$changed_files" ]; then
         changed_count=$(echo "$changed_files" | wc -l | tr -d ' ')
@@ -233,7 +269,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         layer2_raw=$(cat "$review_output_file" 2>/dev/null || echo "")
         layer2_raw_flat=$(echo "$layer2_raw" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
         sync_review_bugfix_items "$project_dir" "$review_output_file" "$window"
-        if ! echo "$layer2_raw_flat" | grep -qE '^[[:space:]]*CLEAN[[:space:]]*$'; then
+        if ! echo "$layer2_raw_flat" | grep -qiE '(^|[^[:alnum:]_])CLEAN([^[:alnum:]_]|$)'; then
             layer2_issues="layer2: ${layer2_raw_flat:0:400}. "
         fi
         layer2_completed=true
@@ -274,9 +310,28 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     review_dir="${project_dir}/.code-review"
     mkdir -p "$review_dir" 2>/dev/null
     review_file="${review_dir}/$(date '+%Y-%m-%d-%H%M%S')-$$.json"
-    cat > "$review_file" <<EOF
-{"date":"$(date '+%Y-%m-%d')","type":"incremental","issues":"${combined_issues:-none}","commit":"${review_commit}"}
-EOF
+    if command -v jq >/dev/null 2>&1; then
+        jq -n \
+          --arg d "$(date '+%Y-%m-%d')" \
+          --arg i "${combined_issues:-none}" \
+          --arg c "${review_commit}" \
+          '{date:$d,type:"incremental",issues:$i,commit:$c}' > "$review_file"
+    else
+        python3 - "$review_file" "$(date '+%Y-%m-%d')" "${combined_issues:-none}" "${review_commit}" <<'PY'
+import json
+import pathlib
+import sys
+
+review_path = pathlib.Path(sys.argv[1])
+payload = {
+    "date": sys.argv[2],
+    "type": "incremental",
+    "issues": sys.argv[3],
+    "commit": sys.argv[4],
+}
+review_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+PY
+    fi
 
     # 清理 trigger 文件（mv 替代 rm 防 race condition）
     mv -f "$trigger_file" "${trigger_file}.done" 2>/dev/null

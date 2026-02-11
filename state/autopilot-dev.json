@@ -1,10 +1,10 @@
 {
   "status": "idle",
-  "context_num": 78,
-  "head": "c3161cc",
-  "commit_msg": "init: autopilot scripts v4.2 with batch 1+2 fixes",
-  "commit_time": 1770825559,
+  "context_num": 91,
+  "head": "5655c6f",
+  "commit_msg": "fix(review): close final PRD review item and harden bugfix sync",
+  "commit_time": 1770829542,
   "commits_30m": 0,
   "working_no_commit": 0,
-  "last_check": 1770828015
+  "last_check": 1770835807
 }

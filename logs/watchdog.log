@@ -1068,3 +1068,205 @@
 [2026-02-11 08:41:39] 📝 agent-simcity: new commit (+1, total since review: 6) — fix(map): preflight renderer selection for compatibility
 [2026-02-11 08:41:39] 📝 replyher_android-2: new commit (+1, total since review: 6) — docs(ios): refresh checklist blockers after upload attempts
 [2026-02-11 08:43:12] 🗜 agent-simcity: sent /compact
+[2026-02-11 08:44:14] 📝 autopilot-dev: new commit (+1, total since review: 2) — docs: update prd-todo with full autopilot upgrade roadmap
+[2026-02-11 08:45:57] 📊 Shike: state=working
+[2026-02-11 08:45:57] 📊 agent-simcity: state=idle
+[2026-02-11 08:45:57] 📊 replyher_android-2: state=idle
+[2026-02-11 08:45:57] 📊 autopilot-dev: state=working
+[2026-02-11 08:46:38] 🔄 agent-simcity: post-compact recovery nudge sent
+[2026-02-11 08:46:39] ✅ agent-simcity: post-compact recovery nudge ack by working state
+[2026-02-11 08:46:39] 📤 replyher_android-2: auto-nudged #1 (idle 269s) — 实现以下 PRD 需求：P0: HTTPS scheme 未强制校验（installDictionaryBu
+[2026-02-11 08:46:39] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-11 08:47:20] 📝 autopilot-dev: new commit (+1, total since review: 3) — docs(prd): mark M-10 as completed
+[2026-02-11 08:47:41] 📝 autopilot-dev: new commit (+1, total since review: 4) — docs(prd): mark M-11 as completed
+[2026-02-11 08:48:02] 📝 autopilot-dev: new commit (+1, total since review: 5) — docs(prd): mark M-12 as completed
+[2026-02-11 08:48:23] 📝 autopilot-dev: new commit (+1, total since review: 6) — docs(prd): mark M-13 as completed
+[2026-02-11 08:48:54] 📝 autopilot-dev: new commit (+1, total since review: 7) — docs(prd): mark M-14 as completed
+[2026-02-11 08:49:25] 📝 autopilot-dev: new commit (+1, total since review: 8) — docs(prd): mark M-15 as completed
+[2026-02-11 08:49:56] 📝 autopilot-dev: new commit (+1, total since review: 9) — docs(prd): mark M-16 as completed
+[2026-02-11 08:50:17] 📝 autopilot-dev: new commit (+1, total since review: 10) — docs(prd): mark idle threshold upgrade as completed
+[2026-02-11 08:50:48] 📝 autopilot-dev: new commit (+1, total since review: 11) — docs(prd): mark idle confirm probes as completed
+[2026-02-11 08:51:08] 📊 Shike: state=working
+[2026-02-11 08:51:08] 📊 agent-simcity: state=working
+[2026-02-11 08:51:08] 📊 replyher_android-2: state=working
+[2026-02-11 08:51:08] 📊 autopilot-dev: state=working
+[2026-02-11 08:51:19] 📝 autopilot-dev: new commit (+1, total since review: 12) — docs(prd): mark idle inertia mechanism as completed
+[2026-02-11 08:51:49] 📝 autopilot-dev: new commit (+1, total since review: 13) — docs(prd): mark codex-status regex hardening as completed
+[2026-02-11 08:52:10] 📝 autopilot-dev: new commit (+1, total since review: 14) — feat(prd): add versioned prd-items schema with bugfix type
+[2026-02-11 08:54:45] 📝 autopilot-dev: new commit (+1, total since review: 15) — feat(prd): add pluggable prd verify engine
+[2026-02-11 08:55:27] 📝 autopilot-dev: new commit (+1, total since review: 16) — feat(prd): add machine-readable prd progress snapshot
+[2026-02-11 08:56:18] 📊 Shike: state=working
+[2026-02-11 08:56:18] 📊 agent-simcity: state=working
+[2026-02-11 08:56:18] 📊 replyher_android-2: state=working
+[2026-02-11 08:56:18] 📊 autopilot-dev: state=working
+[2026-02-11 08:56:28] 📝 replyher_android-2: new commit (+1, total since review: 7) — fix: enforce HTTPS-only bundle install URLs
+[2026-02-11 08:57:10] 📝 autopilot-dev: new commit (+1, total since review: 17) — feat(prd): sync prd-todo from prd progress
+[2026-02-11 08:59:35] 📝 autopilot-dev: new commit (+1, total since review: 18) — feat(prd): trigger PRD checks automatically after commits
+[2026-02-11 09:00:58] 📝 autopilot-dev: new commit (+1, total since review: 19) — feat(prd): auto convert P0/P1 review findings to bugfix items
+[2026-02-11 09:01:29] 📊 Shike: state=working
+[2026-02-11 09:01:29] 📊 agent-simcity: state=working
+[2026-02-11 09:01:29] 📊 replyher_android-2: state=working
+[2026-02-11 09:01:29] 📊 autopilot-dev: state=working
+[2026-02-11 09:02:10] 📝 autopilot-dev: new commit (+1, total since review: 20) — feat(prd): wire PRD verification events into status sync
+[2026-02-11 09:02:42] 📝 autopilot-dev: new commit (+1, total since review: 21) — feat(prd): include checker failure details in nudge messages
+[2026-02-11 09:03:23] 📝 autopilot-dev: new commit (+1, total since review: 22) — feat(compact): reinforce PRD context reminder after compact
+[2026-02-11 09:03:54] 📝 autopilot-dev: new commit (+1, total since review: 23) — docs: add conventions requiring PRD todo updates
+[2026-02-11 09:04:15] 🔄 replyher_android-2: post-compact recovery nudge sent
+[2026-02-11 09:04:16] ✅ replyher_android-2: post-compact recovery nudge ack by working state
+[2026-02-11 09:05:48] 📝 autopilot-dev: new commit (+1, total since review: 24) — fix(review): close final PRD review item and harden bugfix sync
+[2026-02-11 09:06:40] 📊 Shike: state=permission_with_remember
+[2026-02-11 09:06:40] 📊 agent-simcity: state=working
+[2026-02-11 09:06:40] 📊 replyher_android-2: state=working
+[2026-02-11 09:06:40] 📊 autopilot-dev: state=working
+[2026-02-11 09:07:32] 📝 agent-simcity: new commit (+1, total since review: 7) — fix(map): harden media query and SSE compatibility paths
+[2026-02-11 09:10:51] 📤 autopilot-dev: auto-nudged #1 (idle 197s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 09:10:51] ✅ autopilot-dev: idle nudge ack by working state
+[2026-02-11 09:11:53] 📊 Shike: state=permission_with_remember
+[2026-02-11 09:11:53] 📊 agent-simcity: state=working
+[2026-02-11 09:11:53] 📊 replyher_android-2: state=working
+[2026-02-11 09:11:53] 📊 autopilot-dev: state=idle
+[2026-02-11 09:15:40] 📝 agent-simcity: new commit (+1, total since review: 8) — feat(invite): add burst-window anti-abuse risk controls
+[2026-02-11 09:17:03] 📊 Shike: state=permission_with_remember
+[2026-02-11 09:17:03] 📊 agent-simcity: state=idle
+[2026-02-11 09:17:03] 📊 replyher_android-2: state=working
+[2026-02-11 09:17:03] 📊 autopilot-dev: state=idle
+[2026-02-11 09:19:08] 🗜 replyher_android-2: sent /compact
+[2026-02-11 09:20:31] 📝 Shike: new commit (+1, total since review: 15) — fix(api): close P0 ws-token and legacy admin-key-guard risks
+[2026-02-11 09:20:53] 📤 autopilot-dev: auto-nudged #2 (idle 550s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 09:20:53] ✅ autopilot-dev: idle nudge ack by working state
+[2026-02-11 09:22:15] 📊 Shike: state=working
+[2026-02-11 09:22:15] 📊 agent-simcity: state=working
+[2026-02-11 09:22:15] 📊 replyher_android-2: state=working
+[2026-02-11 09:22:15] 📊 autopilot-dev: state=idle
+[2026-02-11 09:22:35] 📝 Shike: new commit (+1, total since review: 16) — perf(api): batch-scan properties list before media hydrate
+[2026-02-11 09:22:36] 📝 agent-simcity: new commit (+1, total since review: 9) — test(invites): cover burst-vs-daily audit warnings
+[2026-02-11 09:27:27] 📊 Shike: state=idle
+[2026-02-11 09:27:27] 📊 agent-simcity: state=idle
+[2026-02-11 09:27:27] 📊 replyher_android-2: state=working
+[2026-02-11 09:27:27] 📝 replyher_android-2: new commit (+1, total since review: 8) — fix(keyboard): harden 30mb memory guard reclaim throttling
+[2026-02-11 09:27:27] 📊 autopilot-dev: state=idle
+[2026-02-11 09:27:38] 🔄 Shike: post-compact recovery nudge sent
+[2026-02-11 09:27:38] ✅ Shike: post-compact recovery nudge ack by working state
+[2026-02-11 09:27:38] 📤 agent-simcity: auto-nudged #1 (idle 302s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 09:27:38] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-11 09:30:24] 📝 Shike: new commit (+1, total since review: 17) — perf(api): merge customer view-filters into single event query
+[2026-02-11 09:31:16] 📝 Shike: new commit (+1, total since review: 18) — perf(api): throttle buyer-session touches and otp minute bursts
+[2026-02-11 09:32:39] 📊 Shike: state=idle
+[2026-02-11 09:32:39] 📊 agent-simcity: state=working
+[2026-02-11 09:32:39] 📊 replyher_android-2: state=working
+[2026-02-11 09:32:39] 📊 autopilot-dev: state=idle
+[2026-02-11 09:35:46] 🗜 agent-simcity: sent /compact
+[2026-02-11 09:36:07] 📝 agent-simcity: new commit (+1, total since review: 10) — feat(rescue): add strict replay gate for reconcile
+[2026-02-11 09:36:18] 📤 Shike: auto-nudged #1 (idle 270s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 09:36:18] ✅ Shike: idle nudge ack by working state
+[2026-02-11 09:36:49] 🗜 Shike: sent /compact
+[2026-02-11 09:37:52] 📊 Shike: state=idle
+[2026-02-11 09:37:52] 📊 agent-simcity: state=idle_low_context
+[2026-02-11 09:37:52] 📊 replyher_android-2: state=working
+[2026-02-11 09:37:52] 📊 autopilot-dev: state=idle
+[2026-02-11 09:40:59] 📤 autopilot-dev: auto-nudged #3 (idle 1185s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 09:40:59] ✅ autopilot-dev: idle nudge ack by working state
+[2026-02-11 09:42:42] 📝 Shike: new commit (+1, total since review: 19) — perf(db): add missing indexes for event/notification/buyer-agent queries
+[2026-02-11 09:42:42] 🔄 agent-simcity: post-compact recovery nudge sent
+[2026-02-11 09:42:42] ✅ agent-simcity: post-compact recovery nudge ack by working state
+[2026-02-11 09:43:03] 📊 Shike: state=idle
+[2026-02-11 09:43:03] 📊 agent-simcity: state=working
+[2026-02-11 09:43:03] 📊 replyher_android-2: state=idle
+[2026-02-11 09:43:03] 📊 autopilot-dev: state=idle
+[2026-02-11 09:44:17] 🔄 replyher_android-2: post-compact recovery nudge sent
+[2026-02-11 09:44:17] ✅ replyher_android-2: post-compact recovery nudge ack by working state
+[2026-02-11 09:47:34] 🔄 Shike: post-compact recovery nudge sent
+[2026-02-11 09:47:34] ✅ Shike: post-compact recovery nudge ack by working state
+[2026-02-11 09:48:16] 📊 Shike: state=working
+[2026-02-11 09:48:16] 📊 agent-simcity: state=working
+[2026-02-11 09:48:16] 📊 replyher_android-2: state=working
+[2026-02-11 09:48:16] 📊 autopilot-dev: state=idle
+[2026-02-11 09:48:47] 📝 agent-simcity: new commit (+1, total since review: 11) — fix(web): harden city fallback refresh and abort handling
+[2026-02-11 09:49:08] 🗜 replyher_android-2: sent /compact
+[2026-02-11 09:50:00] 📝 Shike: new commit (+1, total since review: 20) — perf(api): cap cache memory fallback size with eviction
+[2026-02-11 09:53:27] 📊 Shike: state=idle
+[2026-02-11 09:53:27] 📊 agent-simcity: state=working
+[2026-02-11 09:53:27] 📊 replyher_android-2: state=working
+[2026-02-11 09:53:28] 📊 autopilot-dev: state=idle
+[2026-02-11 09:53:48] 📝 Shike: new commit (+1, total since review: 21) — refactor(api): move property list filters into query dto
+[2026-02-11 09:54:30] 📝 agent-simcity: new commit (+1, total since review: 12) — feat(invites): add code burst guard and config audit
+[2026-02-11 09:57:48] 📝 Shike: new commit (+1, total since review: 22) — perf(auth): switch session verify cache to shared cache service
+[2026-02-11 09:58:40] 📊 Shike: state=idle
+[2026-02-11 09:58:40] 📊 agent-simcity: state=idle
+[2026-02-11 09:58:40] 📊 replyher_android-2: state=working
+[2026-02-11 09:58:40] 📊 autopilot-dev: state=idle
+[2026-02-11 09:59:32] 📤 agent-simcity: auto-nudged #1 (idle 302s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 09:59:32] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-11 10:02:50] 📤 Shike: auto-nudged #1 (idle 291s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 10:02:50] ✅ Shike: idle nudge ack by working state
+[2026-02-11 10:03:52] 📊 Shike: state=idle
+[2026-02-11 10:03:52] 📊 agent-simcity: state=idle
+[2026-02-11 10:03:52] 📊 replyher_android-2: state=working
+[2026-02-11 10:03:52] 📊 autopilot-dev: state=idle
+[2026-02-11 10:04:03] 🗜 replyher_android-2: sent /compact
+[2026-02-11 10:06:39] 🔄 replyher_android-2: post-compact recovery nudge sent
+[2026-02-11 10:06:39] ✅ replyher_android-2: post-compact recovery nudge ack by working state
+[2026-02-11 10:06:39] 🚀 Watchdog v4 started (tick=10s, idle_threshold=300s, idle_confirm=3, inertia=90s, projects=4, pid=74706)
+[2026-02-11 10:09:36] 📤 agent-simcity: auto-nudged #2 (idle 562s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 10:09:36] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-11 10:11:52] 📊 Shike: state=working
+[2026-02-11 10:11:52] 📊 agent-simcity: state=idle
+[2026-02-11 10:11:52] 📊 replyher_android-2: state=working
+[2026-02-11 10:11:52] 📊 autopilot-dev: state=idle
+[2026-02-11 10:16:31] 📝 Shike: new commit (+1, total since review: 23) — feat(reports): add daily 22:00 digest with funnel and risk todos
+[2026-02-11 10:17:02] 📊 Shike: state=working
+[2026-02-11 10:17:02] 📊 agent-simcity: state=working
+[2026-02-11 10:17:03] 📊 replyher_android-2: state=working
+[2026-02-11 10:17:03] 📊 autopilot-dev: state=idle
+[2026-02-11 10:21:01] 📝 Shike: new commit (+1, total since review: 24) — feat(web): add buyer more-properties filters and load-more list
+[2026-02-11 10:21:01] 📤 autopilot-dev: auto-nudged #4 (idle 2392s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 10:21:01] ✅ autopilot-dev: idle nudge ack by working state
+[2026-02-11 10:22:13] 📊 Shike: state=working
+[2026-02-11 10:22:13] 📊 agent-simcity: state=working
+[2026-02-11 10:22:13] 📊 replyher_android-2: state=working
+[2026-02-11 10:22:14] 📊 autopilot-dev: state=idle
+[2026-02-11 10:23:46] 📝 Shike: new commit (+1, total since review: 25) — feat(web): prompt subscribe consent on favorite action
+[2026-02-11 10:26:22] 🗜 Shike: sent /compact
+[2026-02-11 10:27:04] 📝 agent-simcity: new commit (+1, total since review: 13) — fix(review): close critical and important security gaps
+[2026-02-11 10:27:25] 📊 Shike: state=idle
+[2026-02-11 10:27:25] 📊 agent-simcity: state=working
+[2026-02-11 10:27:25] 📊 replyher_android-2: state=working
+[2026-02-11 10:27:25] 📊 autopilot-dev: state=idle
+[2026-02-11 10:29:30] 🗜 agent-simcity: sent /compact
+[2026-02-11 10:30:22] 🗜 replyher_android-2: sent /compact
+[2026-02-11 10:32:37] 📊 Shike: state=working
+[2026-02-11 10:32:37] 📊 agent-simcity: state=working
+[2026-02-11 10:32:37] 📊 replyher_android-2: state=idle
+[2026-02-11 10:32:37] 📊 autopilot-dev: state=idle
+[2026-02-11 10:35:44] 🔄 replyher_android-2: post-compact recovery nudge sent
+[2026-02-11 10:35:44] ✅ replyher_android-2: post-compact recovery nudge ack by working state
+[2026-02-11 10:37:48] 📊 Shike: state=working
+[2026-02-11 10:37:48] 📊 agent-simcity: state=working
+[2026-02-11 10:37:48] 📊 replyher_android-2: state=working
+[2026-02-11 10:37:49] 📊 autopilot-dev: state=idle
+[2026-02-11 10:38:30] 📝 agent-simcity: new commit (+1, total since review: 14) — feat(chain-v2): cap recovery retries and surface dropped records
+[2026-02-11 10:41:05] 📝 agent-simcity: new commit (+1, total since review: 15) — feat(invites): add burst-to-daily sensitivity warnings
+[2026-02-11 10:41:16] 📝 Shike: new commit (+1, total since review: 26) — test+feat: harden subscribe consent flows and video upload limits
+[2026-02-11 10:42:59] 📊 Shike: state=working
+[2026-02-11 10:42:59] 📊 agent-simcity: state=idle
+[2026-02-11 10:42:59] 📊 replyher_android-2: state=working
+[2026-02-11 10:42:59] 📊 autopilot-dev: state=idle
+[2026-02-11 10:44:32] 📝 Shike: new commit (+1, total since review: 27) — docs: update prd-todo with full PRD gap analysis + conventions
+[2026-02-11 10:46:27] 🔄 agent-simcity: post-compact recovery nudge sent
+[2026-02-11 10:46:27] ✅ agent-simcity: post-compact recovery nudge ack by working state
+[2026-02-11 10:48:10] 📊 Shike: state=working
+[2026-02-11 10:48:10] 📊 agent-simcity: state=working
+[2026-02-11 10:48:10] 📊 replyher_android-2: state=working
+[2026-02-11 10:48:10] 📊 autopilot-dev: state=idle
+[2026-02-11 10:49:54] 📝 agent-simcity: new commit (+1, total since review: 16) — fix(chain): enforce rpc timeout and retry defaults
+[2026-02-11 10:50:35] 📝 agent-simcity: new commit (+1, total since review: 17) — chore(prd): mark completed todo items with checkmarks
+[2026-02-11 10:53:21] 📊 Shike: state=working
+[2026-02-11 10:53:21] 📊 agent-simcity: state=idle
+[2026-02-11 10:53:21] 📊 replyher_android-2: state=working
+[2026-02-11 10:53:21] 📊 autopilot-dev: state=working
+[2026-02-11 10:55:46] 📤 agent-simcity: auto-nudged #1 (idle 300s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 10:55:46] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-11 10:58:31] 📊 Shike: state=working
+[2026-02-11 10:58:31] 📊 agent-simcity: state=idle
+[2026-02-11 10:58:31] 📊 replyher_android-2: state=working
+[2026-02-11 10:58:31] 📊 autopilot-dev: state=working
