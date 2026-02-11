@@ -83,6 +83,23 @@ sync_project_status() {
     fi
 }
 
+sync_review_bugfix_items() {
+    local project_dir="$1" review_file="$2" window="$3"
+    local items_file="${project_dir}/prd-items.yaml"
+    local sync_script="${SCRIPT_DIR}/review_to_prd_bugfix.py"
+
+    [ -f "$items_file" ] || return 0
+    [ -x "$sync_script" ] || return 0
+    [ -s "$review_file" ] || return 0
+
+    local sync_output
+    sync_output=$(python3 "$sync_script" --review-file "$review_file" --items-file "$items_file" 2>&1 || true)
+    if echo "$sync_output" | grep -q '"added_bugfixes":'; then
+        log "🧩 ${window}: review->bugfix sync ${sync_output}"
+        sync_project_status "$project_dir" "prd_bugfix_synced" "window=${window}"
+    fi
+}
+
 acquire_script_lock() {
     if mkdir "$REVIEW_LOCK" 2>/dev/null; then
         echo "$$" > "${REVIEW_LOCK}/pid"
@@ -215,6 +232,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
 
         layer2_raw=$(cat "$review_output_file" 2>/dev/null || echo "")
         layer2_raw_flat=$(echo "$layer2_raw" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
+        sync_review_bugfix_items "$project_dir" "$review_output_file" "$window"
         if ! echo "$layer2_raw_flat" | grep -qE '^[[:space:]]*CLEAN[[:space:]]*$'; then
             layer2_issues="layer2: ${layer2_raw_flat:0:400}. "
         fi

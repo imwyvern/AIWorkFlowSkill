@@ -34,7 +34,7 @@
 - ✅ prd-progress.json 机器可读状态
 - ✅ prd-todo.md 自动生成（从 progress.json）
 - ✅ commit 后自动匹配 PRD item 并跑 checker
-- review P0/P1 自动转 prd-items.yaml bugfix item
+- ✅ review P0/P1 自动转 prd-items.yaml bugfix item
 - 接入 watchdog 触发 + status-sync 推进
 - nudge 带具体失败原因（而非泛泛"继续推进"）
 
