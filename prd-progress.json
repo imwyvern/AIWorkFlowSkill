@@ -1,0 +1,152 @@
+{
+  "meta": {
+    "generated_at": "2026-02-11T16:54:53Z",
+    "project_dir": "/Users/wes/.autopilot",
+    "items_file": "/Users/wes/.autopilot/prd-items.yaml",
+    "version": "v1.0.0",
+    "strict_mode": false,
+    "selected_count": 4,
+    "passed_count": 4,
+    "failed_count": 0,
+    "no_checks_count": 0,
+    "changed_files_filter": [],
+    "only_type": "all",
+    "only_ids": []
+  },
+  "results": [
+    {
+      "id": "M-10",
+      "type": "feature",
+      "priority": "P2",
+      "severity": null,
+      "title": "Low-context threshold consistency",
+      "status": "passed",
+      "configured_status": "verified",
+      "iteration": "sprint-2026w06",
+      "owner": "autopilot",
+      "paths": [
+        "scripts/autopilot-constants.sh",
+        "scripts/watchdog.sh",
+        "scripts/codex-status.sh",
+        "scripts/monitor-all.sh"
+      ],
+      "checks": [
+        {
+          "id": "constants-threshold",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/autopilot-constants.sh"
+        },
+        {
+          "id": "watchdog-threshold-link",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/watchdog.sh"
+        },
+        {
+          "id": "codex-status-threshold-link",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/codex-status.sh"
+        }
+      ]
+    },
+    {
+      "id": "M-11",
+      "type": "feature",
+      "priority": "P2",
+      "severity": null,
+      "title": "Layer2 file list cap no longer limits review scope",
+      "status": "passed",
+      "configured_status": "verified",
+      "iteration": "sprint-2026w06",
+      "owner": "autopilot",
+      "paths": [
+        "scripts/consume-review-trigger.sh"
+      ],
+      "checks": [
+        {
+          "id": "review-range-present",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/consume-review-trigger.sh"
+        },
+        {
+          "id": "full-scope-message",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/consume-review-trigger.sh"
+        }
+      ]
+    },
+    {
+      "id": "M-12",
+      "type": "feature",
+      "priority": "P2",
+      "severity": null,
+      "title": "tsc timeout protection",
+      "status": "passed",
+      "configured_status": "verified",
+      "iteration": "sprint-2026w06",
+      "owner": "autopilot",
+      "paths": [],
+      "checks": [
+        {
+          "id": "timeout-wrapper",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/consume-review-trigger.sh"
+        },
+        {
+          "id": "tsc-timeout-constant",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/autopilot-constants.sh"
+        }
+      ]
+    },
+    {
+      "id": "BUG-IDLE-001",
+      "type": "bugfix",
+      "priority": null,
+      "severity": "high",
+      "title": "Idle false positive mitigation",
+      "status": "passed",
+      "configured_status": "verified",
+      "iteration": "sprint-2026w06",
+      "owner": null,
+      "paths": [],
+      "checks": [
+        {
+          "id": "idle-threshold-updated",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/autopilot-constants.sh"
+        },
+        {
+          "id": "idle-confirm-updated",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/autopilot-constants.sh"
+        },
+        {
+          "id": "inertia-updated",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/autopilot-constants.sh"
+        },
+        {
+          "id": "regex-accept-thinking",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/codex-status.sh"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "failed_ids": [],
+    "no_checks_ids": []
+  }
+}
