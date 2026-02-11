@@ -65,11 +65,13 @@ def parse_review_rows(content: str) -> list[dict[str, str]]:
         if not line:
             continue
 
-        if line.startswith("## ") and "P0" in line:
-            current_priority = "P0"
-            continue
-        if line.startswith("## ") and "P1" in line:
-            current_priority = "P1"
+        if line.startswith("## "):
+            if "P0" in line:
+                current_priority = "P0"
+            elif "P1" in line:
+                current_priority = "P1"
+            else:
+                current_priority = ""
             continue
 
         if not line.startswith("|"):

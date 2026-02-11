@@ -94,7 +94,7 @@ sync_review_bugfix_items() {
 
     local sync_output
     sync_output=$(python3 "$sync_script" --review-file "$review_file" --items-file "$items_file" 2>&1 || true)
-    if echo "$sync_output" | grep -q '"added_bugfixes":'; then
+    if echo "$sync_output" | grep -qE '"added_bugfixes":[[:space:]]*[1-9][0-9]*'; then
         log "🧩 ${window}: review->bugfix sync ${sync_output}"
         sync_project_status "$project_dir" "prd_bugfix_synced" "window=${window}"
     fi
