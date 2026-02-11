@@ -32,7 +32,7 @@
 - ✅ prd-items.yaml 结构化格式（支持多版本、bugfix type）
 - ✅ prd-verify.sh 自动验收引擎（checker 插件化）
 - ✅ prd-progress.json 机器可读状态
-- prd-todo.md 自动生成（从 progress.json）
+- ✅ prd-todo.md 自动生成（从 progress.json）
 - commit 后自动匹配 PRD item 并跑 checker
 - review P0/P1 自动转 prd-items.yaml bugfix item
 - 接入 watchdog 触发 + status-sync 推进
