@@ -24,7 +24,7 @@
 
 ## idle 检测升级
 - ✅ IDLE_THRESHOLD 120→300s
-- 连续 3 次确认机制（IDLE_CONFIRM_PROBES=3）
+- ✅ 连续 3 次确认机制（IDLE_CONFIRM_PROBES=3）
 - Working 惯性 90s（WORKING_INERTIA=90）
 - codex-status.sh 正则补全（Thinking 等误判）
 
