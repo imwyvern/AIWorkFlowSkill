@@ -1,10 +1,10 @@
 {
   "status": "working",
-  "context_num": 21,
-  "head": "5cf0c01",
-  "commit_msg": "feat(web): add visitor identity badges for customer/peer/unknown",
-  "commit_time": 1770802870,
-  "commits_30m": 0,
-  "working_no_commit": 1,
-  "last_check": 1770828014
+  "context_num": 70,
+  "head": "089ef0c",
+  "commit_msg": "docs: update prd-todo with full PRD gap analysis + conventions",
+  "commit_time": 1770835472,
+  "commits_30m": 4,
+  "working_no_commit": 0,
+  "last_check": 1770835807
 }

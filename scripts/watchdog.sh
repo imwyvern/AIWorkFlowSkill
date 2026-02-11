@@ -16,6 +16,9 @@
 # 用法: 通过 launchd 管理，开机自启
 # 日志: ~/.autopilot/logs/watchdog.log
 
+# NOTE: do NOT add `set -e`.
+# This script intentionally tolerates non-zero probe commands (e.g. grep no-match),
+# and the ERR trap is diagnostic-only.
 set -uo pipefail
 TMUX="/opt/homebrew/bin/tmux"
 CODEX="/opt/homebrew/bin/codex"
@@ -36,6 +39,8 @@ PERMISSION_COOLDOWN=60    # 权限 approve 冷却（秒）
 COMPACT_COOLDOWN=600      # compact 冷却（秒）
 SHELL_COOLDOWN=300        # shell 恢复冷却（秒）
 LOW_CONTEXT_THRESHOLD="${LOW_CONTEXT_THRESHOLD:-25}"
+ACK_CHECK_MAX_JOBS="${ACK_CHECK_MAX_JOBS:-8}"
+ACK_CHECK_LOCK_STALE_SECONDS="${ACK_CHECK_LOCK_STALE_SECONDS:-120}"
 
 # ---- 路径 ----
 LOG="$HOME/.autopilot/logs/watchdog.log"
@@ -179,10 +184,28 @@ get_window_status_json() {
 start_nudge_ack_check() {
     local window="$1" safe="$2" project_dir="$3" before_head="$4" before_ctx="$5" reason="$6"
     local ack_lock="${LOCK_DIR}/ack-${safe}.lock.d"
+    local active_ack_jobs
+
+    active_ack_jobs=$(find "$LOCK_DIR" -maxdepth 1 -type d -name 'ack-*.lock.d' 2>/dev/null | wc -l | tr -d ' ')
+    active_ack_jobs=$(normalize_int "$active_ack_jobs")
+    if [ "$active_ack_jobs" -ge "$ACK_CHECK_MAX_JOBS" ]; then
+        log "⏭ ${window}: skip ack check (active=${active_ack_jobs}, cap=${ACK_CHECK_MAX_JOBS})"
+        return 0
+    fi
+
+    if [ -d "$ack_lock" ]; then
+        local lock_age
+        lock_age=$(( $(now_ts) - $(stat -f %m "$ack_lock" 2>/dev/null || echo 0) ))
+        if [ "$lock_age" -gt "$ACK_CHECK_LOCK_STALE_SECONDS" ]; then
+            rm -rf "$ack_lock" 2>/dev/null || true
+        fi
+    fi
 
     mkdir "$ack_lock" 2>/dev/null || return 0
+    echo "$$" > "${ack_lock}/parent_pid"
     (
         trap 'rm -rf "'"$ack_lock"'"' EXIT
+        echo "$$" > "${ack_lock}/pid"
         local elapsed=0
         while [ "$elapsed" -lt 60 ]; do
             local cur_head cur_json cur_state cur_ctx
@@ -241,6 +264,28 @@ run_with_timeout() {
 
 now_ts() {
     date +%s
+}
+
+pid_start_signature() {
+    local pid="$1"
+    LC_ALL=C ps -p "$pid" -o lstart= 2>/dev/null | awk '{$1=$1; print}'
+}
+
+pid_is_same_process() {
+    local pid="$1" expected_start="$2" current_start
+    [ "$pid" -gt 0 ] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    [ -n "$expected_start" ] || return 1
+    current_start=$(pid_start_signature "$pid")
+    [ -n "$current_start" ] || return 1
+    [ "$current_start" = "$expected_start" ]
+}
+
+pid_looks_like_watchdog() {
+    local pid="$1" cmdline
+    [ "$pid" -gt 0 ] || return 1
+    cmdline=$(ps -p "$pid" -o command= 2>/dev/null || true)
+    echo "$cmdline" | grep -q 'watchdog.sh'
 }
 
 rotate_log() {
@@ -460,6 +505,7 @@ handle_idle() {
         local issues_file="${STATE_DIR}/autocheck-issues-${safe}"
         local prd_issues_file="${STATE_DIR}/prd-issues-${safe}"
         local used_issues_file=false
+        local used_prd_issues_file=false
         if [ -f "$issues_file" ]; then
             local issues
             issues=$(cat "$issues_file")
@@ -469,12 +515,14 @@ handle_idle() {
             local prd_issues
             prd_issues=$(cat "$prd_issues_file")
             nudge_msg="PRD checker 未通过，先修复以下失败项：${prd_issues}"
+            used_prd_issues_file=true
         else
             nudge_msg=$(get_smart_nudge "$safe" "$project_dir")
         fi
 
         if send_tmux_message "$window" "$nudge_msg" "idle nudge"; then
             [ "$used_issues_file" = "true" ] && rm -f "$issues_file"
+            [ "$used_prd_issues_file" = "true" ] && rm -f "$prd_issues_file"
             set_cooldown "$key"
             echo $((nudge_count + 1)) > "$nudge_count_file"
             log "📤 ${window}: auto-nudged #$((nudge_count+1)) (idle ${idle_secs}s) — ${nudge_msg:0:80}"
@@ -659,11 +707,19 @@ run_prd_checks_for_commit() {
     local window="$1" safe="$2" project_dir="$3" last_head="$4" current_head="$5"
     local prd_items="${project_dir}/prd-items.yaml"
     local prd_verify="${SCRIPT_DIR}/prd-verify.sh"
+    local prd_engine="${SCRIPT_DIR}/prd_verify_engine.py"
     local output_file="${project_dir}/prd-progress.json"
     local issues_file="${STATE_DIR}/prd-issues-${safe}"
+    local -a verify_cmd
 
-    [ -x "$prd_verify" ] || return
     [ -f "$prd_items" ] || return
+    if [ -x "$prd_verify" ]; then
+        verify_cmd=("$prd_verify" --project-dir "$project_dir")
+    elif [ -f "$prd_engine" ]; then
+        verify_cmd=("python3" "$prd_engine" --project-dir "$project_dir")
+    else
+        return
+    fi
 
     local changed_files
     if [ "$last_head" != "none" ]; then
@@ -677,7 +733,7 @@ run_prd_checks_for_commit() {
     local changed_csv
     changed_csv=$(echo "$changed_files" | paste -sd, -)
     local verify_output rc
-    verify_output=$(run_with_timeout 45 "$prd_verify" --project-dir "$project_dir" --changed-files "$changed_csv" --output "$output_file" --sync-todo --print-failures-only 2>&1)
+    verify_output=$(run_with_timeout 45 "${verify_cmd[@]}" --changed-files "$changed_csv" --output "$output_file" --sync-todo --print-failures-only 2>&1)
     rc=$?
 
     if [ "$rc" -eq 0 ]; then
@@ -723,7 +779,13 @@ check_incremental_review_trigger() {
     # 触发增量 review — 写 pending 标记，cron 执行成功后才重置计数（两阶段提交）
     local trigger_file="${STATE_DIR}/review-trigger-${safe}"
     local tmp_trigger="${trigger_file}.tmp"
-    echo "${project_dir}" > "$tmp_trigger" && mv -f "$tmp_trigger" "$trigger_file"
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg project_dir "$project_dir" --arg window "$window" '{project_dir:$project_dir,window:$window}' > "$tmp_trigger"
+    else
+        # 兼容无 jq 环境：退回旧格式（仅 project_dir）
+        echo "${project_dir}" > "$tmp_trigger"
+    fi
+    mv -f "$tmp_trigger" "$trigger_file"
     set_cooldown "$key"
     sync_project_status "$project_dir" "review_triggered" "window=${window}" "since_review=${count}" "state=idle"
 
@@ -795,7 +857,6 @@ get_smart_nudge() {
     fi
 
     # PRD 驱动 nudge：从 prd-todo.md 读取下一个待办
-    local prd_todo="${project_dir}/prd-todo.md"
     if [ -f "$prd_todo" ]; then
         local next_task
         next_task=$(grep '^- ' "$prd_todo" | grep -vi '✅\|⛔\|blocked\|done\|完成\|^\- \[x\]\|^\- \[X\]' | head -1 | sed 's/^- //')
@@ -819,11 +880,16 @@ get_smart_nudge() {
 # ---- 进程级互斥锁 ----
 WATCHDOG_LOCK="${LOCK_DIR}/watchdog-main.lock.d"
 if ! mkdir "$WATCHDOG_LOCK" 2>/dev/null; then
-    # P0-2 fix: pid 存活检查替代 mtime
+    # 通过 PID + 进程启动签名识别锁持有者，避免 PID 复用误判
     existing_pid=$(cat "${WATCHDOG_LOCK}/pid" 2>/dev/null || echo 0)
     existing_pid=$(normalize_int "$existing_pid")
-    if [ "$existing_pid" -gt 0 ] && kill -0 "$existing_pid" 2>/dev/null; then
+    existing_start_sig=$(cat "${WATCHDOG_LOCK}/start_sig" 2>/dev/null || echo "")
+    if pid_is_same_process "$existing_pid" "$existing_start_sig"; then
         echo "Another watchdog is running (pid ${existing_pid}). Exiting."
+        exit 1
+    elif [ -z "$existing_start_sig" ] && [ "$existing_pid" -gt 0 ] && kill -0 "$existing_pid" 2>/dev/null && pid_looks_like_watchdog "$existing_pid"; then
+        # 兼容旧锁格式（仅有 pid）
+        echo "Another watchdog is running (pid ${existing_pid}, legacy lock). Exiting."
         exit 1
     else
         log "🔓 Stale lock found (pid ${existing_pid} dead), reclaiming"
@@ -832,7 +898,9 @@ if ! mkdir "$WATCHDOG_LOCK" 2>/dev/null; then
     fi
 fi
 echo $$ > "${WATCHDOG_LOCK}/pid"
-# P0-2 fix: ERR trap for crash diagnostics
+pid_start_signature "$$" > "${WATCHDOG_LOCK}/start_sig" 2>/dev/null || true
+now_ts > "${WATCHDOG_LOCK}/started_at"
+# ERR trap 仅用于诊断；不要与 set -e 组合
 trap 'log "💥 ERR at line $LINENO (code=$?)"' ERR
 trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$WATCHDOG_LOCK"' EXIT
 

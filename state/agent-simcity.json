@@ -1,10 +1,10 @@
 {
   "status": "working",
-  "context_num": 25,
-  "head": "6481fdc",
-  "commit_msg": "fix(map): harden async render flow and fallback polling",
-  "commit_time": 1770827866,
-  "commits_30m": 3,
+  "context_num": 38,
+  "head": "0fbbfa0",
+  "commit_msg": "fix(chain): enforce rpc timeout and retry defaults",
+  "commit_time": 1770835786,
+  "commits_30m": 4,
   "working_no_commit": 0,
-  "last_check": 1770828015
+  "last_check": 1770835807
 }
