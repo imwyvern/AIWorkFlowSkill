@@ -20,7 +20,7 @@
 - ✅ M-13 review 历史按日期覆盖
 - ✅ M-14 watchdog 仅 set -u，关键命令失败继续
 - ✅ M-15 md5 管道优先级
-- M-16 tmux paste-buffer 竞态
+- ✅ M-16 tmux paste-buffer 竞态
 
 ## idle 检测升级
 - IDLE_THRESHOLD 120→300s
