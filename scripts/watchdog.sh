@@ -458,12 +458,17 @@ handle_idle() {
 
         # 优先级 2: Layer 1 自动检查发现的问题
         local issues_file="${STATE_DIR}/autocheck-issues-${safe}"
+        local prd_issues_file="${STATE_DIR}/prd-issues-${safe}"
         local used_issues_file=false
         if [ -f "$issues_file" ]; then
             local issues
             issues=$(cat "$issues_file")
             nudge_msg="修复以下自动检查发现的问题，然后继续推进：${issues}"
             used_issues_file=true
+        elif [ -f "$prd_issues_file" ]; then
+            local prd_issues
+            prd_issues=$(cat "$prd_issues_file")
+            nudge_msg="PRD checker 未通过，先修复以下失败项：${prd_issues}"
         else
             nudge_msg=$(get_smart_nudge "$safe" "$project_dir")
         fi
