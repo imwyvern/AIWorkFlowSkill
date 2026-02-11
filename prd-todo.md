@@ -39,7 +39,7 @@
 - ✅ nudge 带具体失败原因（而非泛泛"继续推进"）
 
 ## compact_prompt 升级
-- 加入 prd-todo.md 引用（compact 后不丢任务上下文）
+- ✅ 加入 prd-todo.md 引用（compact 后不丢任务上下文）
 
 ## CONVENTIONS.md 规则
 - Codex 完成任务后必须更新 prd-todo.md 标记 ✅

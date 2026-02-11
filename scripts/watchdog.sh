@@ -444,7 +444,7 @@ handle_idle() {
         # 优先级 1: post-compact 恢复协议
         local compact_flag="${STATE_DIR}/post-compact-${safe}"
         if [ -f "$compact_flag" ]; then
-            nudge_msg="compaction完成。cat CONVENTIONS.md && cat prd-todo.md 然后继续下一个任务"
+            nudge_msg="compaction完成。先阅读 CONVENTIONS.md 与 prd-todo.md（必要时对照 prd-items.yaml / prd-progress.json），然后继续下一个任务。"
             if send_tmux_message "$window" "$nudge_msg" "post-compact recovery nudge"; then
                 rm -f "$compact_flag"
                 set_cooldown "$key"
