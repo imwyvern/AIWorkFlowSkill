@@ -322,7 +322,68 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="print compact failure summary to stdout",
     )
+    parser.add_argument(
+        "--sync-todo",
+        action="store_true",
+        help="sync prd-todo.md checkmarks from verification result",
+    )
+    parser.add_argument(
+        "--todo-file",
+        default="prd-todo.md",
+        help="todo markdown path used with --sync-todo",
+    )
     return parser.parse_args()
+
+
+def sync_todo_file(project_dir: Path, todo_file: str, report: dict[str, Any]) -> None:
+    todo_path = (project_dir / todo_file).resolve()
+    if not todo_path.exists():
+        return
+
+    status_by_id: dict[str, str] = {}
+    for result in report.get("results", []):
+        if not isinstance(result, dict):
+            continue
+        item_id = str(result.get("id", "")).strip()
+        if not item_id:
+            continue
+        status_by_id[item_id] = str(result.get("status", ""))
+
+    if not status_by_id:
+        return
+
+    lines = todo_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    updated_lines: list[str] = []
+    item_pattern = re.compile(r"^-\s*(✅\s*)?([A-Za-z]+-\d+)\b")
+    changed = False
+
+    for line in lines:
+        m = item_pattern.match(line)
+        if not m:
+            updated_lines.append(line)
+            continue
+
+        item_id = m.group(2)
+        status = status_by_id.get(item_id)
+        if not status:
+            updated_lines.append(line)
+            continue
+
+        want_checked = status == "passed"
+        has_checked = line.startswith("- ✅ ")
+        base_line = re.sub(r"^-\s*✅\s*", "- ", line)
+
+        if want_checked and not has_checked:
+            updated_lines.append(base_line.replace("- ", "- ✅ ", 1))
+            changed = True
+        elif not want_checked and has_checked:
+            updated_lines.append(base_line)
+            changed = True
+        else:
+            updated_lines.append(line)
+
+    if changed:
+        todo_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -383,6 +444,9 @@ def main() -> int:
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
         f.write("\n")
+
+    if args.sync_todo:
+        sync_todo_file(project_dir, args.todo_file, report)
 
     if args.print_failures_only:
         for result in results:
