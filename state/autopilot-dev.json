@@ -1,10 +1,10 @@
 {
   "status": "idle",
-  "context_num": 91,
-  "head": "5655c6f",
-  "commit_msg": "fix(review): close final PRD review item and harden bugfix sync",
-  "commit_time": 1770829542,
-  "commits_30m": 0,
+  "context_num": 64,
+  "head": "4e61883",
+  "commit_msg": "fix: P0+P1 fixes from Claude v5 review (JSON injection, PID lock, PRD issues cle",
+  "commit_time": 1770836376,
+  "commits_30m": 1,
   "working_no_commit": 0,
-  "last_check": 1770835807
+  "last_check": 1770836414
 }
