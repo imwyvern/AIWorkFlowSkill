@@ -1014,3 +1014,57 @@
 [2026-02-11 07:55:31] 📊 Shike: state=idle
 [2026-02-11 07:55:31] 📊 agent-simcity: state=idle
 [2026-02-11 07:55:31] 📊 replyher_android-2: state=idle
+[2026-02-11 07:59:30] 🚀 Watchdog v4 started (tick=10s, idle_threshold=120s, projects=4, pid=83114)
+[2026-02-11 07:59:31] 📝 autopilot-dev: new commit (+1, total since review: 1) — init: autopilot scripts v4.2 with batch 1+2 fixes
+[2026-02-11 08:04:38] 📊 Shike: state=working
+[2026-02-11 08:04:39] 📊 agent-simcity: state=working
+[2026-02-11 08:04:39] 📊 replyher_android-2: state=working
+[2026-02-11 08:04:39] 📊 autopilot-dev: state=idle
+[2026-02-11 08:09:50] 📊 Shike: state=working
+[2026-02-11 08:09:50] 📊 agent-simcity: state=working
+[2026-02-11 08:09:50] 📊 replyher_android-2: state=working
+[2026-02-11 08:09:50] 📊 autopilot-dev: state=working
+[2026-02-11 08:15:00] 📊 Shike: state=working
+[2026-02-11 08:15:00] 📊 agent-simcity: state=working
+[2026-02-11 08:15:00] 📊 replyher_android-2: state=working
+[2026-02-11 08:15:00] 📊 autopilot-dev: state=working
+[2026-02-11 08:15:10] 📝 agent-simcity: new commit (+1, total since review: 3) — feat: harden ab tracking quality with metric policy and dedupe
+[2026-02-11 08:15:23] 🔓 Stale lock found (pid 83114 dead), reclaiming
+[2026-02-11 08:15:23] 🚀 Watchdog v4 started (tick=10s, idle_threshold=300s, idle_confirm=3, inertia=90s, projects=4, pid=16658)
+[2026-02-11 08:15:24] 💥 ERR at line 803 (code=1)
+[2026-02-11 08:17:14] 📤 replyher_android-2: auto-nudged #3 (idle 124s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 08:17:14] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-11 08:20:09] 📊 Shike: state=working
+[2026-02-11 08:20:09] 📊 agent-simcity: state=idle
+[2026-02-11 08:20:10] 🔄 agent-simcity: post-compact recovery nudge sent
+[2026-02-11 08:20:10] ✅ agent-simcity: post-compact recovery nudge ack by working state
+[2026-02-11 08:20:10] 📊 replyher_android-2: state=working
+[2026-02-11 08:20:10] 📊 autopilot-dev: state=idle
+[2026-02-11 08:21:12] 📤 autopilot-dev: auto-nudged #1 (idle 124s) — 实现以下 PRD 需求：M-10 低 context 阈值不一致 (15 vs 25)
+[2026-02-11 08:21:13] ✅ autopilot-dev: idle nudge ack by working state
+[2026-02-11 08:23:05] 📝 agent-simcity: new commit (+1, total since review: 4) — feat: polish pip interactions and telemetry flow
+[2026-02-11 08:25:19] 📊 Shike: state=idle
+[2026-02-11 08:25:19] 📊 agent-simcity: state=idle
+[2026-02-11 08:25:19] 📊 replyher_android-2: state=idle
+[2026-02-11 08:25:20] 📊 autopilot-dev: state=working
+[2026-02-11 08:28:05] 📤 agent-simcity: auto-nudged #1 (idle 258s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-11 08:28:05] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-11 08:30:29] 📊 Shike: state=idle
+[2026-02-11 08:30:29] 📊 agent-simcity: state=idle
+[2026-02-11 08:30:29] 📊 replyher_android-2: state=idle
+[2026-02-11 08:30:29] 📊 autopilot-dev: state=idle
+[2026-02-11 08:31:21] 📤 autopilot-dev: auto-nudged #2 (idle 279s) — 实现以下 PRD 需求：M-11 Layer2 文件列表上限 10 个
+[2026-02-11 08:31:21] ✅ autopilot-dev: idle nudge ack by working state
+[2026-02-11 08:34:26] 📝 replyher_android-2: new commit (+1, total since review: 5) — test(ios): stabilize acceptance checks and jest asyncstorage mock
+[2026-02-11 08:35:38] 📊 Shike: state=working
+[2026-02-11 08:35:38] 📊 agent-simcity: state=working
+[2026-02-11 08:35:38] 📊 replyher_android-2: state=working
+[2026-02-11 08:35:38] 📊 autopilot-dev: state=idle
+[2026-02-11 08:37:52] 📝 agent-simcity: new commit (+1, total since review: 5) — fix(map): harden async render flow and fallback polling
+[2026-02-11 08:40:47] 📊 Shike: state=working
+[2026-02-11 08:40:47] 📊 agent-simcity: state=working
+[2026-02-11 08:40:47] 📊 replyher_android-2: state=working
+[2026-02-11 08:40:47] 📊 autopilot-dev: state=idle
+[2026-02-11 08:41:39] 📝 agent-simcity: new commit (+1, total since review: 6) — fix(map): preflight renderer selection for compatibility
+[2026-02-11 08:41:39] 📝 replyher_android-2: new commit (+1, total since review: 6) — docs(ios): refresh checklist blockers after upload attempts
+[2026-02-11 08:43:12] 🗜 agent-simcity: sent /compact

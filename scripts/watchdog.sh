@@ -4,7 +4,7 @@
 # 职责分工：
 #   watchdog.sh (本脚本) — 快速响应，10-30秒级别
 #     ✅ 权限提示 → 立即 auto-approve (p Enter)
-#     ✅ idle 检测 → 2 分钟无活动自动 nudge (信号驱动)
+#     ✅ idle 检测 → 5 分钟无活动自动 nudge (信号驱动)
 #     ✅ 低上下文 → 发 /compact
 #     ✅ shell 恢复 → codex resume
 #     ✅ Layer 1: 新 commit → 自动 lint/tsc/pattern 扫描
@@ -16,19 +16,26 @@
 # 用法: 通过 launchd 管理，开机自启
 # 日志: ~/.autopilot/logs/watchdog.log
 
-set -u
+set -uo pipefail
 TMUX="/opt/homebrew/bin/tmux"
 CODEX="/opt/homebrew/bin/codex"
 SESSION="autopilot"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/autopilot-constants.sh"
+fi
 
 # ---- 时间参数 ----
 TICK=10                   # 主循环间隔（秒）
-IDLE_THRESHOLD=120        # idle 超过多久触发 nudge（秒）
+IDLE_THRESHOLD="${IDLE_THRESHOLD:-300}"              # idle 超过多久触发 nudge（秒）
+IDLE_CONFIRM_PROBES="${IDLE_CONFIRM_PROBES:-3}"      # 连续多少次 idle 才确认空闲
+WORKING_INERTIA_SECONDS="${WORKING_INERTIA_SECONDS:-90}" # 最近 working 的惯性窗口（秒）
 NUDGE_COOLDOWN=300        # 同一窗口 nudge 冷却（秒），防止反复骚扰
 PERMISSION_COOLDOWN=60    # 权限 approve 冷却（秒）
 COMPACT_COOLDOWN=600      # compact 冷却（秒）
 SHELL_COOLDOWN=300        # shell 恢复冷却（秒）
+LOW_CONTEXT_THRESHOLD="${LOW_CONTEXT_THRESHOLD:-25}"
 
 # ---- 路径 ----
 LOG="$HOME/.autopilot/logs/watchdog.log"
@@ -66,6 +73,41 @@ log() {
 
 sanitize() {
     echo "$1" | tr -cd 'a-zA-Z0-9_-'
+}
+
+hash_text() {
+    local content="$1"
+    if command -v md5 >/dev/null 2>&1; then
+        printf '%s' "$content" | md5 -q
+        return 0
+    fi
+    if command -v md5sum >/dev/null 2>&1; then
+        printf '%s' "$content" | md5sum | awk '{print $1}'
+        return 0
+    fi
+    if command -v shasum >/dev/null 2>&1; then
+        printf '%s' "$content" | shasum -a 256 | awk '{print $1}'
+        return 0
+    fi
+    echo "nohash-$(now_ts)"
+}
+
+assert_runtime_ready() {
+    if [ ! -x "$TMUX" ]; then
+        echo "watchdog fatal: tmux not executable at $TMUX" >&2
+        exit 1
+    fi
+    if [ ! -x "${SCRIPT_DIR}/codex-status.sh" ]; then
+        echo "watchdog fatal: missing ${SCRIPT_DIR}/codex-status.sh" >&2
+        exit 1
+    fi
+    if [ ! -x "${SCRIPT_DIR}/tmux-send.sh" ]; then
+        echo "watchdog fatal: missing ${SCRIPT_DIR}/tmux-send.sh" >&2
+        exit 1
+    fi
+    if [ ! -x "$CODEX" ]; then
+        log "⚠️ watchdog: codex binary not found at $CODEX, shell recovery may fail"
+    fi
 }
 
 load_projects() {
@@ -272,6 +314,35 @@ get_idle_seconds() {
     fi
 }
 
+reset_idle_probe() {
+    local safe="$1"
+    echo 0 > "${ACTIVITY_DIR}/idle-probe-${safe}"
+}
+
+# 连续确认 + working 惯性，避免快照抖动误判 idle
+idle_state_confirmed() {
+    local safe="$1"
+    local probe_file="${ACTIVITY_DIR}/idle-probe-${safe}"
+    local probe_count idle_secs
+
+    idle_secs=$(get_idle_seconds "$safe")
+    if [ "$idle_secs" -lt "$WORKING_INERTIA_SECONDS" ]; then
+        echo 0 > "$probe_file"
+        return 1
+    fi
+
+    probe_count=$(cat "$probe_file" 2>/dev/null || echo 0)
+    probe_count=$(normalize_int "$probe_count")
+    probe_count=$((probe_count + 1))
+    echo "$probe_count" > "$probe_file"
+
+    if [ "$probe_count" -lt "$IDLE_CONFIRM_PROBES" ]; then
+        return 1
+    fi
+
+    return 0
+}
+
 # ---- 状态检测（统一来源 codex-status.sh）----
 detect_state() {
     local window="$1"
@@ -289,7 +360,7 @@ detect_state() {
             touch "$compact_flag"
             rm -f "${STATE_DIR}/was-low-context-${safe}"
         fi
-    elif [ "$ctx_num" -ge 0 ] && [ "$ctx_num" -le 25 ]; then
+    elif [ "$ctx_num" -ge 0 ] && [ "$ctx_num" -le "$LOW_CONTEXT_THRESHOLD" ]; then
         touch "${STATE_DIR}/was-low-context-${safe}"
     fi
 
@@ -563,7 +634,7 @@ run_auto_checks() {
         if [ -n "$issues" ]; then
             # P1-4: issue hash 去重，相同问题不重复 nudge
             local issues_hash
-            issues_hash=$(echo "$issues" | (md5 -q 2>/dev/null || md5sum 2>/dev/null | cut -d' ' -f1 || echo "nohash"))
+            issues_hash=$(hash_text "$issues")
             local prev_hash
             prev_hash=$(cat "${STATE_DIR}/autocheck-hash-${safe}" 2>/dev/null || echo "")
             if [ "$issues_hash" = "$prev_hash" ]; then
@@ -720,8 +791,9 @@ echo $$ > "${WATCHDOG_LOCK}/pid"
 trap 'log "💥 ERR at line $LINENO (code=$?)"' ERR
 trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$WATCHDOG_LOCK"' EXIT
 
+assert_runtime_ready
 load_projects
-log "🚀 Watchdog v4 started (tick=${TICK}s, idle_threshold=${IDLE_THRESHOLD}s, projects=${#PROJECTS[@]}, pid=$$)"
+log "🚀 Watchdog v4 started (tick=${TICK}s, idle_threshold=${IDLE_THRESHOLD}s, idle_confirm=${IDLE_CONFIRM_PROBES}, inertia=${WORKING_INERTIA_SECONDS}s, projects=${#PROJECTS[@]}, pid=$$)"
 
 cycle=0
 while true; do
@@ -743,21 +815,29 @@ while true; do
         case "$state" in
             working)
                 update_activity "$safe"
+                reset_idle_probe "$safe"
                 ;;
-            permission)
+            permission|permission_with_remember)
+                reset_idle_probe "$safe"
                 handle_permission "$window" "$safe"
                 ;;
             idle)
-                handle_idle "$window" "$safe" "$project_dir"
+                if idle_state_confirmed "$safe"; then
+                    handle_idle "$window" "$safe" "$project_dir"
+                fi
                 ;;
             idle_low_context)
-                handle_low_context "$window" "$safe" "$project_dir"
+                if idle_state_confirmed "$safe"; then
+                    handle_low_context "$window" "$safe" "$project_dir"
+                fi
                 ;;
             shell)
+                reset_idle_probe "$safe"
                 handle_shell "$window" "$safe" "$project_dir"
                 ;;
             absent)
                 # tmux window 不存在，跳过
+                reset_idle_probe "$safe"
                 ;;
         esac
     done
