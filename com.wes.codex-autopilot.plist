@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.wes.codex-autopilot</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/wes/.autopilot/CodexAutopilot.app/Contents/MacOS/CodexAutopilot</string>
+    </array>
+    
+    <key>StartInterval</key>
+    <integer>60</integer>
+    
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>StandardOutPath</key>
+    <string>/tmp/autopilot/stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/tmp/autopilot/stderr.log</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>/Users/wes</string>
+    </dict>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/wes/.autopilot</string>
+</dict>
+</plist>

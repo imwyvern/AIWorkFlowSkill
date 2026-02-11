@@ -1,0 +1,95 @@
+# Codex Desktop Autopilot v2 - 配置文件
+
+# 时间阈值 (秒)
+active_threshold: 120        # < 120s = Codex 正在工作
+idle_threshold: 360          # 120~360s = Codex 停下来了
+cooldown: 120                # 两次发送间最少间隔
+
+# 安全限制
+max_daily_sends_total: 200   # 所有项目发送总量上限
+max_daily_sends: 50          # 单项目每日最大（默认，项目可覆盖）
+max_consecutive_failures: 5  # 连续失败上限
+loop_detection_threshold: 3  # 连续相似输出次数
+
+# 验证
+verify_poll_interval: 5      # 验证轮询间隔 (秒)
+verify_max_wait: 30          # 验证最大等待 (秒)
+task_timeout: 3600           # 单任务超时 (秒)
+
+# 多项目调度 (Phase 3)
+scheduler:
+  # 调度策略: round-robin（轮询）或 priority（优先级）
+  strategy: "round-robin"
+  
+  # 每次 tick 最多发送几个项目
+  # 注意: 每次发送含验证 polling (最多30s) + 窗口切换延迟
+  # tick 间隔 60s，max_sends_per_tick=1 是安全值
+  # 如需提高，建议同步增大 launchd StartInterval
+  max_sends_per_tick: 1
+  
+  # 两个项目发送之间的间隔 (秒)
+  inter_project_delay: 5
+
+# Telegram 通知与命令
+# 请填入你的 Bot Token 和 Chat ID
+telegram:
+  bot_token: "8144550528:AAGl9pEDI-hC41XoJgixrRO_x0pH7wXZWE4"
+  chat_id: "5321002140"
+  status_interval: 1800      # 状态报告间隔 (秒)
+
+# 项目目录列表 (简单模式)
+# 添加你要自动驾驶的项目路径
+# 这些目录会被扫描，优先使用 ~/.autopilot/projects/{name}/tasks.yaml
+project_dirs:
+  - "/Users/wes/Shike"
+  - "/Users/wes/projects/agent-simcity"
+  - "/Users/wes/replyher_android-2"
+  # 以下项目暂不监督，需要时再加回来
+  # - "/Users/wes/autocontent"
+  # - "/Users/wes/SoulKeyboard-Wechat"
+  # - "/Users/wes/quant-develop"
+
+# 高级模式: 使用 ~/.autopilot/projects/ 目录
+# 每个项目一个子目录，包含 tasks.yaml
+#
+# 目录结构:
+# ~/.autopilot/
+# ├── config.yaml                   # 此文件
+# ├── state.json                    # 自动生成的状态文件
+# └── projects/
+#     ├── shike/
+#     │   ├── tasks.yaml            # 任务定义
+#     │   └── state.json            # 项目状态（自动生成）
+#     ├── simcity/
+#     │   └── tasks.yaml
+#     └── portfolio/
+#         └── tasks.yaml
+#
+# tasks.yaml 示例:
+# project:
+#   name: "Shike"
+#   dir: "/Users/wes/Shike"
+#   description: "食客 App"
+#   enabled: true
+#   priority: 1                    # 数字越小优先级越高
+#   overrides:                     # 可选：项目级配置覆盖
+#     cooldown: 90                 # 这个项目可以更频繁
+#     max_daily_sends: 80          # 这个项目允许更多发送
+#
+# tasks:
+#   - id: "setup-project"
+#     name: "项目初始化"
+#     prompt: |
+#       初始化项目...
+#     done_when:
+#       files:
+#         - path: "package.json"
+
+# CLI 路径（launchd 环境 PATH 可能不含 /opt/homebrew/bin）
+codex_path: "/opt/homebrew/bin/codex"
+tmux_path: "/opt/homebrew/bin/tmux"
+
+# 日志
+log_dir: "/tmp/autopilot"
+log_max_size: 1048576        # 1MB
+log_keep: 2                  # 保留几份旧日志

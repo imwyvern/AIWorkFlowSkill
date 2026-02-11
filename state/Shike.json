@@ -1,0 +1,10 @@
+{
+  "status": "absent",
+  "context_num": -1,
+  "head": "5cf0c01",
+  "commit_msg": "feat(web): add visitor identity badges for customer/peer/unknown",
+  "commit_time": 1770802870,
+  "commits_30m": 0,
+  "working_no_commit": 0,
+  "last_check": 1770824854
+}

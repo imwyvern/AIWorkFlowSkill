@@ -1,0 +1,1 @@
+实现以下 PRD 需求：chain v2 验证完善（Done）— 已补齐记录恢复兜底：storage 异常降级内存队列 + tx 记录 chainId RPC 兜底
