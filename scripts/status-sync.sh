@@ -95,7 +95,7 @@ if [ ! -s "$STATUS_FILE" ] || ! jq -e . "$STATUS_FILE" >/dev/null 2>&1; then
     jq -n \
       --arg project "$project_name" \
       --arg now "$NOW_UTC" \
-      '{project:$project,phase:"dev",phases:{dev:{status:"pending"},review:{status:"pending"},test:{status:"pending"},deploy:{status:"pending"}},updated_at:$now}' \
+      '{project:$project,phase:"dev",phases:{dev:{status:"pending"},review:{status:"pending"},test:{status:"pending"},deploy:{status:"pending"},prd:{status:"pending"}},updated_at:$now}' \
       > "${STATUS_FILE}.tmp.$$"
     mv -f "${STATUS_FILE}.tmp.$$" "$STATUS_FILE"
 fi
@@ -118,7 +118,8 @@ jq \
     | .phases.dev = (.phases.dev // {"status":"pending"})
     | .phases.review = (.phases.review // {"status":"pending"})
     | .phases.test = (.phases.test // {"status":"pending"})
-    | .phases.deploy = (.phases.deploy // {"status":"pending"});
+    | .phases.deploy = (.phases.deploy // {"status":"pending"})
+    | .phases.prd = (.phases.prd // {"status":"pending"});
 
   def stamp_meta:
     .updated_at = $now
@@ -160,12 +161,32 @@ jq \
     | (if $p1 != "" then .phases.review.p1 = ($p1 | tonumber? // .phases.review.p1 // 0) else . end)
     | (if $issues != "" then .phases.review.issues = [$issues] else . end);
 
+  def on_prd_verify_pass:
+    .phases.prd.status = "verified"
+    | .phases.prd.last_result = "pass"
+    | .phases.prd.last_verified_at = $now;
+
+  def on_prd_verify_fail:
+    .phase = "dev"
+    | .phases.prd.status = "failed"
+    | .phases.prd.last_result = "fail"
+    | .phases.prd.last_verified_at = $now
+    | (if $issues != "" then .phases.prd.last_issues = $issues else . end);
+
+  def on_prd_bugfix_synced:
+    .phases.prd.status = "in_progress"
+    | .phases.prd.bugfix_sync_count = ((.phases.prd.bugfix_sync_count // 0) + 1)
+    | .phases.prd.last_sync_at = $now;
+
   ensure_shape
   | stamp_meta
   | if $event == "commit" then on_commit
     elif $event == "review_triggered" then on_review_triggered
     elif $event == "review_clean" then on_review_clean
     elif $event == "review_issues" then on_review_issues
+    elif $event == "prd_verify_pass" then on_prd_verify_pass
+    elif $event == "prd_verify_fail" then on_prd_verify_fail
+    elif $event == "prd_bugfix_synced" then on_prd_bugfix_synced
     elif $event == "compact_sent" then .autopilot.compact_count = ((.autopilot.compact_count // 0) + 1)
     elif $event == "nudge_sent" then .autopilot.nudge_count = ((.autopilot.nudge_count // 0) + 1)
     elif $event == "shell_recovery" then .autopilot.recoveries = ((.autopilot.recoveries // 0) + 1)
@@ -174,4 +195,3 @@ jq \
   ' "$STATUS_FILE" > "${STATUS_FILE}.tmp.$$"
 
 mv -f "${STATUS_FILE}.tmp.$$" "$STATUS_FILE"
-
