@@ -26,7 +26,7 @@
 - ✅ IDLE_THRESHOLD 120→300s
 - ✅ 连续 3 次确认机制（IDLE_CONFIRM_PROBES=3）
 - ✅ Working 惯性 90s（WORKING_INERTIA=90）
-- codex-status.sh 正则补全（Thinking 等误判）
+- ✅ codex-status.sh 正则补全（Thinking 等误判）
 
 ## PRD 引擎
 - prd-items.yaml 结构化格式（支持多版本、bugfix type）
