@@ -12,12 +12,19 @@
 # 变化定义：
 #   - 状态变化（working→idle, idle→working, shell, compact 等）
 #   - 新 commit 产生（HEAD 变了）
-#   - context 跨过阈值（>50→<30, >30→<15）
+#   - context 跨过阈值（>LOW_CONTEXT_THRESHOLD, >LOW_CONTEXT_CRITICAL_THRESHOLD）
 #   - 连续 3 轮无 commit 但 working（追踪但不告警）
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/autopilot-constants.sh"
+fi
+LOW_CONTEXT_THRESHOLD="${LOW_CONTEXT_THRESHOLD:-25}"
+LOW_CONTEXT_CRITICAL_THRESHOLD="${LOW_CONTEXT_CRITICAL_THRESHOLD:-15}"
+
 STATE_DIR="$HOME/.autopilot/state"
 LOCK_DIR="$HOME/.autopilot/locks"
 MONITOR_LOCK="${LOCK_DIR}/monitor-all.lock.d"
@@ -155,11 +162,11 @@ for entry in "${PROJECTS[@]}"; do
     fi
 
     # Context 跨阈值
-    if [ "$PREV_CONTEXT" -gt 30 ] && [ "$CUR_CONTEXT" -le 30 ] && [ "$CUR_CONTEXT" -gt 0 ]; then
+    if [ "$PREV_CONTEXT" -gt "$LOW_CONTEXT_THRESHOLD" ] && [ "$CUR_CONTEXT" -le "$LOW_CONTEXT_THRESHOLD" ] && [ "$CUR_CONTEXT" -gt 0 ]; then
         HAS_CHANGE=true
         CHANGE_REASONS="${CHANGE_REASONS}context:${PREV_CONTEXT}%→${CUR_CONTEXT}%(low) "
     fi
-    if [ "$PREV_CONTEXT" -gt 15 ] && [ "$CUR_CONTEXT" -le 15 ] && [ "$CUR_CONTEXT" -gt 0 ]; then
+    if [ "$PREV_CONTEXT" -gt "$LOW_CONTEXT_CRITICAL_THRESHOLD" ] && [ "$CUR_CONTEXT" -le "$LOW_CONTEXT_CRITICAL_THRESHOLD" ] && [ "$CUR_CONTEXT" -gt 0 ]; then
         HAS_CHANGE=true
         CHANGE_REASONS="${CHANGE_REASONS}context:critical(${CUR_CONTEXT}%) "
     fi

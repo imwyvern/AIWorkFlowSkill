@@ -4,9 +4,17 @@
 # 由 monitor-all.sh 或 cron 调用。
 # 检查 review-trigger-* 文件，执行增量 review，成功后重置 watchdog 计数。
 
-set -u
+set -uo pipefail
 
 SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)}"
+if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/autopilot-constants.sh"
+fi
+LAYER2_FILE_PREVIEW_LIMIT="${LAYER2_FILE_PREVIEW_LIMIT:-20}"
+LAYER2_FALLBACK_COMMIT_WINDOW="${LAYER2_FALLBACK_COMMIT_WINDOW:-30}"
+TSC_TIMEOUT_SECONDS="${TSC_TIMEOUT_SECONDS:-30}"
+REVIEW_OUTPUT_WAIT_SECONDS="${REVIEW_OUTPUT_WAIT_SECONDS:-90}"
 
 # 数字清洗
 normalize_int() {
@@ -27,6 +35,23 @@ log() {
 
 now_ts() {
     date +%s
+}
+
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_CMD="gtimeout"
+fi
+
+run_with_timeout() {
+    local secs="$1"
+    shift
+    if [ -n "$TIMEOUT_CMD" ]; then
+        "$TIMEOUT_CMD" "$secs" "$@"
+    else
+        "$@"
+    fi
 }
 
 is_codex_idle() {
@@ -119,10 +144,17 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     local_issues=""
 
     if [ -f "${project_dir}/tsconfig.json" ]; then
-        tsc_errors=$(cd "$project_dir" && npx tsc --noEmit 2>&1 | grep -c "error TS" 2>/dev/null || true)
-        tsc_errors=$(normalize_int "$tsc_errors")
-        if [ "$tsc_errors" -gt 0 ]; then
-            local_issues="${local_issues}tsc: ${tsc_errors} errors. "
+        tsc_output=""
+        tsc_rc=0
+        tsc_output=$(cd "$project_dir" && run_with_timeout "$TSC_TIMEOUT_SECONDS" npx tsc --noEmit 2>&1) || tsc_rc=$?
+        if [ "$tsc_rc" -eq 124 ] || [ "$tsc_rc" -eq 137 ]; then
+            local_issues="${local_issues}tsc: timeout(${TSC_TIMEOUT_SECONDS}s). "
+        else
+            tsc_errors=$(echo "$tsc_output" | grep -c "error TS" 2>/dev/null || true)
+            tsc_errors=$(normalize_int "$tsc_errors")
+            if [ "$tsc_errors" -gt 0 ]; then
+                local_issues="${local_issues}tsc: ${tsc_errors} errors. "
+            fi
         fi
     fi
 
@@ -134,19 +166,33 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
 
     # 获取变更文件列表
     changed_files=""
+    review_range=""
     if [ -n "$last_review" ] && git -C "$project_dir" cat-file -e "$last_review" 2>/dev/null; then
-        changed_files=$(git -C "$project_dir" diff "${last_review}..HEAD" --name-only --diff-filter=ACMR 2>/dev/null | head -10)
+        review_range="${last_review}..HEAD"
+        changed_files=$(git -C "$project_dir" diff "$review_range" --name-only --diff-filter=ACMR 2>/dev/null || true)
     else
-        changed_files=$(git -C "$project_dir" diff HEAD~15..HEAD --name-only --diff-filter=ACMR 2>/dev/null | head -10)
+        review_range="HEAD~${LAYER2_FALLBACK_COMMIT_WINDOW}..HEAD"
+        changed_files=$(git -C "$project_dir" diff "$review_range" --name-only --diff-filter=ACMR 2>/dev/null || true)
     fi
+    changed_files=$(echo "$changed_files" | sed '/^$/d')
 
     layer2_completed=false
     layer2_issues=""
     window="$safe"
 
     if [ -n "$changed_files" ]; then
-        file_list=$(echo "$changed_files" | tr '\n' ', ' | cut -c1-140)
-        review_msg="执行增量review(P0-P3)。把结果写入 ${review_output_file}；如果无问题仅写 CLEAN。仅审查: ${file_list}"
+        changed_count=$(echo "$changed_files" | wc -l | tr -d ' ')
+        changed_count=$(normalize_int "$changed_count")
+        preview_files=$(echo "$changed_files" | head -n "$LAYER2_FILE_PREVIEW_LIMIT")
+        file_list=$(echo "$preview_files" | tr '\n' ', ' | sed 's/, $//')
+        scope_hint="全量审查范围: git diff ${review_range} --name-only --diff-filter=ACMR（共${changed_count}个文件）"
+        if [ "$changed_count" -gt "$LAYER2_FILE_PREVIEW_LIMIT" ]; then
+            omitted=$((changed_count - LAYER2_FILE_PREVIEW_LIMIT))
+            scope_hint="${scope_hint}；以下仅预览前${LAYER2_FILE_PREVIEW_LIMIT}个: ${file_list} ...(+${omitted} files omitted)"
+        else
+            scope_hint="${scope_hint}；文件: ${file_list}"
+        fi
+        review_msg="执行增量review(P0-P3)。把结果写入 ${review_output_file}；如果无问题仅写 CLEAN。请按完整范围审查，不要只看预览列表。${scope_hint}"
 
         if [ ! -x "${SCRIPT_DIR}/tmux-send.sh" ]; then
             log "⏭ ${safe}: tmux-send.sh missing, keep trigger"
@@ -162,8 +208,8 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         fi
 
         # M-1: 必须等 Layer2 输出文件存在且非空，才允许判定 clean/reset
-        if ! wait_for_non_empty_file "$review_output_file" 90; then
-            log "⏭ ${safe}: Layer 2 output missing/empty after 90s, keep trigger"
+        if ! wait_for_non_empty_file "$review_output_file" "$REVIEW_OUTPUT_WAIT_SECONDS"; then
+            log "⏭ ${safe}: Layer 2 output missing/empty after ${REVIEW_OUTPUT_WAIT_SECONDS}s, keep trigger"
             continue
         fi
 
@@ -209,7 +255,8 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     # 写 review 历史
     review_dir="${project_dir}/.code-review"
     mkdir -p "$review_dir" 2>/dev/null
-    cat > "${review_dir}/$(date '+%Y-%m-%d').json" <<EOF
+    review_file="${review_dir}/$(date '+%Y-%m-%d-%H%M%S')-$$.json"
+    cat > "$review_file" <<EOF
 {"date":"$(date '+%Y-%m-%d')","type":"incremental","issues":"${combined_issues:-none}","commit":"${review_commit}"}
 EOF
 

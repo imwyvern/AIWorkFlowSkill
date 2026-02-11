@@ -11,6 +11,59 @@ TMUX="/opt/homebrew/bin/tmux"
 SESSION="autopilot"
 WINDOW="${1:?用法: tmux-send.sh <window> <message>}"
 MESSAGE="${2:?缺少消息参数}"
+LOCK_DIR="$HOME/.autopilot/locks"
+mkdir -p "$LOCK_DIR"
+
+sanitize() {
+    echo "$1" | tr -cd 'a-zA-Z0-9_-'
+}
+
+normalize_int() {
+    local val
+    val=$(echo "${1:-}" | tr -dc '0-9')
+    echo "${val:-0}"
+}
+
+SAFE_WINDOW="$(sanitize "$WINDOW")"
+[ -n "$SAFE_WINDOW" ] || SAFE_WINDOW="window"
+SEND_LOCK="${LOCK_DIR}/tmux-send-${SAFE_WINDOW}.lock.d"
+
+acquire_send_lock() {
+    if mkdir "$SEND_LOCK" 2>/dev/null; then
+        echo "$$" > "${SEND_LOCK}/pid"
+        return 0
+    fi
+
+    local existing_pid
+    existing_pid=$(cat "${SEND_LOCK}/pid" 2>/dev/null || echo 0)
+    existing_pid=$(normalize_int "$existing_pid")
+    if [ "$existing_pid" -gt 0 ] && kill -0 "$existing_pid" 2>/dev/null; then
+        return 1
+    fi
+
+    rm -rf "$SEND_LOCK" 2>/dev/null || true
+    mkdir "$SEND_LOCK" 2>/dev/null || return 1
+    echo "$$" > "${SEND_LOCK}/pid"
+    return 0
+}
+
+if ! acquire_send_lock; then
+    echo "ERROR: send lock busy for window '$WINDOW'" >&2
+    exit 3
+fi
+
+TMPFILE=""
+BUFFER_NAME=""
+cleanup() {
+    if [ -n "$BUFFER_NAME" ]; then
+        "$TMUX" delete-buffer -b "$BUFFER_NAME" >/dev/null 2>&1 || true
+    fi
+    if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
+        rm -f "$TMPFILE"
+    fi
+    rm -rf "$SEND_LOCK" 2>/dev/null || true
+}
+trap cleanup EXIT
 
 # 检查 session 存在
 if ! "$TMUX" has-session -t "$SESSION" 2>/dev/null; then
@@ -47,9 +100,10 @@ else
     TMPFILE=$(mktemp /tmp/tmux-paste.XXXXXX)
     printf '%s' "$SINGLE_LINE" > "$TMPFILE"
 
-    "$TMUX" load-buffer -b autopilot-msg "$TMPFILE"
-    "$TMUX" paste-buffer -b autopilot-msg -t "${SESSION}:${WINDOW}" -d
-    rm -f "$TMPFILE"
+    BUFFER_NAME="autopilot-msg-${SAFE_WINDOW}-$$-$(date +%s)-${RANDOM}"
+    "$TMUX" load-buffer -b "$BUFFER_NAME" "$TMPFILE"
+    "$TMUX" paste-buffer -b "$BUFFER_NAME" -t "${SESSION}:${WINDOW}" -d
+    BUFFER_NAME=""
 
     sleep 0.3
     "$TMUX" send-keys -t "${SESSION}:${WINDOW}" Enter

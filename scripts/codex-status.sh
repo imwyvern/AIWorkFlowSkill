@@ -10,6 +10,12 @@ set -euo pipefail
 TMUX="/opt/homebrew/bin/tmux"
 SESSION="autopilot"
 WINDOW="${1:?用法: codex-status.sh <window>}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/autopilot-constants.sh"
+fi
+LOW_CONTEXT_THRESHOLD="${LOW_CONTEXT_THRESHOLD:-25}"
 
 # ---- 基础检查 ----
 if ! "$TMUX" has-session -t "$SESSION" 2>/dev/null; then
@@ -60,16 +66,16 @@ ACTIVITY_LINES=$(echo "$PANE" | tail -15 | head -12)
 #   d) 特殊短语
 # ============================================================
 
-# 2a + 2b: 通用 + 不规则
-if echo "$ACTIVITY_LINES" | grep -qE "^  ?• ([A-Z][a-z]+(ing|ed|te|d|ote) |Ran |Wrote |Read |Set |Got |Put |Did |Built |Sent |Found |Made |Took )"; then
-    LAST_ACTIVITY=$(echo "$ACTIVITY_LINES" | grep -oE "• [A-Z][a-z]+ [^│]*" | tail -1 | head -c 120 || echo "")
+# 2a + 2b: 通用 + 不规则（容忍 Thinking... / 小写首字母 / 冒号等）
+if echo "$ACTIVITY_LINES" | grep -qiE "^  ?• (([A-Za-z][a-z]+(ing|ed|te|d|ote)([ :].*|[.]{3}|…|$))|(ran|wrote|read|set|got|put|did|built|sent|found|made|took)([ :].*|$))"; then
+    LAST_ACTIVITY=$(echo "$ACTIVITY_LINES" | grep -oE "• [^│]{1,120}" | tail -1 | head -c 120 || echo "")
     echo "{\"status\":\"working\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"last_activity\":\"$LAST_ACTIVITY\"}"
     exit 0
 fi
 
-# 2c: 独立动词行 + 下一行有 └
-if echo "$ACTIVITY_LINES" | grep -qE "^  ?• [A-Z][a-z]+$" && echo "$ACTIVITY_LINES" | grep -qE "^ +└"; then
-    LAST_ACTIVITY=$(echo "$ACTIVITY_LINES" | grep -oE "• [A-Z][a-z]+" | tail -1 | head -c 120 || echo "")
+# 2c: 独立动词行 + 下一行有 └（容忍 Thinking...）
+if echo "$ACTIVITY_LINES" | grep -qiE "^  ?• [A-Za-z][a-z]+([.]{3}|…)?$" && echo "$ACTIVITY_LINES" | grep -qE "^ +└"; then
+    LAST_ACTIVITY=$(echo "$ACTIVITY_LINES" | grep -oE "• [^│]{1,120}" | tail -1 | head -c 120 || echo "")
     echo "{\"status\":\"working\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"last_activity\":\"$LAST_ACTIVITY\"}"
     exit 0
 fi
@@ -84,8 +90,8 @@ fi
 # ============================================================
 # 检测 3: 权限确认
 # ============================================================
-if echo "$ACTIVITY_LINES" | grep -qE "Yes, proceed|Press enter to confirm|don't ask again|Allow once|Allow always"; then
-    if echo "$ACTIVITY_LINES" | grep -qE "don't ask again|Allow always"; then
+if echo "$ACTIVITY_LINES" | grep -qiE "Yes, proceed|Press +enter +to +confirm|don't ask again|Allow once|Allow always|Esc to cancel"; then
+    if echo "$ACTIVITY_LINES" | grep -qiE "don't ask again|Allow always"; then
         echo "{\"status\":\"permission_with_remember\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"detail\":\"can permanently allow\"}"
     else
         echo "{\"status\":\"permission\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"detail\":\"waiting for permission\"}"
@@ -99,7 +105,7 @@ fi
 PROMPT_LINE=$(echo "$PANE" | grep "^›" | tail -1 | head -c 120 || echo "")
 
 # context unknown 时不触发 compact（可能 TUI 还没渲染完），当普通 idle
-if [ "$CONTEXT_NUM" -ge 1 ] && [ "$CONTEXT_NUM" -le 25 ]; then
+if [ "$CONTEXT_NUM" -ge 1 ] && [ "$CONTEXT_NUM" -le "$LOW_CONTEXT_THRESHOLD" ]; then
     echo "{\"status\":\"idle_low_context\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"prompt\":\"$PROMPT_LINE\"}"
     exit 1
 fi
