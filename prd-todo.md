@@ -16,7 +16,7 @@
 ## 第三批修复
 - ✅ M-10 低 context 阈值不一致 (15 vs 25)
 - ✅ M-11 Layer2 文件列表上限 10 个
-- M-12 tsc --noEmit 无 timeout
+- ✅ M-12 tsc --noEmit 无 timeout
 - M-13 review 历史按日期覆盖
 - M-14 watchdog 仅 set -u，关键命令失败继续
 - M-15 md5 管道优先级
