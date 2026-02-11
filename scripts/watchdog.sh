@@ -570,6 +570,8 @@ check_new_commits() {
 
     # Layer 1 自动检查
     run_auto_checks "$window" "$safe" "$project_dir" "$msg"
+    # PRD 引擎：按本次 commit 变更文件自动匹配并执行 checker
+    run_prd_checks_for_commit "$window" "$safe" "$project_dir" "$last_head" "$current_head"
 
     # Layer 2 触发检查：commit 数达标且 idle 时，通知 cron 触发增量 review
     check_incremental_review_trigger "$window" "$safe" "$project_dir" "$count"
@@ -646,6 +648,44 @@ run_auto_checks() {
             fi
         fi
     ) &
+}
+
+run_prd_checks_for_commit() {
+    local window="$1" safe="$2" project_dir="$3" last_head="$4" current_head="$5"
+    local prd_items="${project_dir}/prd-items.yaml"
+    local prd_verify="${SCRIPT_DIR}/prd-verify.sh"
+    local output_file="${project_dir}/prd-progress.json"
+    local issues_file="${STATE_DIR}/prd-issues-${safe}"
+
+    [ -x "$prd_verify" ] || return
+    [ -f "$prd_items" ] || return
+
+    local changed_files
+    if [ "$last_head" != "none" ]; then
+        changed_files=$(run_with_timeout 10 git -C "$project_dir" diff --name-only "${last_head}..${current_head}" --diff-filter=ACMR 2>/dev/null || true)
+    else
+        changed_files=$(run_with_timeout 10 git -C "$project_dir" show --pretty='' --name-only "${current_head}" --diff-filter=ACMR 2>/dev/null || true)
+    fi
+    changed_files=$(echo "$changed_files" | sed '/^$/d')
+    [ -z "$changed_files" ] && return
+
+    local changed_csv
+    changed_csv=$(echo "$changed_files" | paste -sd, -)
+    local verify_output rc
+    verify_output=$(run_with_timeout 45 "$prd_verify" --project-dir "$project_dir" --changed-files "$changed_csv" --output "$output_file" --sync-todo --print-failures-only 2>&1)
+    rc=$?
+
+    if [ "$rc" -eq 0 ]; then
+        rm -f "$issues_file"
+        log "✅ ${window}: PRD verify passed for ${current_head:0:7}"
+        sync_project_status "$project_dir" "prd_verify_pass" "window=${window}" "state=working" "head=${current_head}"
+        return
+    fi
+
+    verify_output=$(echo "$verify_output" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
+    echo "$verify_output" > "${issues_file}.tmp" && mv -f "${issues_file}.tmp" "$issues_file"
+    log "⚠️ ${window}: PRD verify failed — ${verify_output:0:200}"
+    sync_project_status "$project_dir" "prd_verify_fail" "window=${window}" "state=working" "head=${current_head}" "issues=${verify_output:0:220}"
 }
 
 # Layer 2 增量 review 触发
