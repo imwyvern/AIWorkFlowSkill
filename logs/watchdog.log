@@ -1270,3 +1270,9 @@
 [2026-02-11 10:58:31] 📊 agent-simcity: state=idle
 [2026-02-11 10:58:31] 📊 replyher_android-2: state=working
 [2026-02-11 10:58:31] 📊 autopilot-dev: state=working
+[2026-02-11 10:59:43] 🚀 Watchdog v4 started (tick=10s, idle_threshold=300s, idle_confirm=3, inertia=90s, projects=4, pid=27641)
+[2026-02-11 10:59:43] 📝 autopilot-dev: new commit (+1, total since review: 25) — fix: P0+P1 fixes from Claude v5 review (JSON injection, PID lock, PRD issues cleanup)
+[2026-02-11 10:59:43] ✅ autopilot-dev: PRD verify passed for 4e61883
+[2026-02-11 10:59:43] 🔍 autopilot-dev: incremental review triggered (25 commits, 1770836383s since last review)
+[2026-02-11 11:00:15] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-11 11:00:15] [review-consumer] 📤 autopilot-dev: Layer 2 incremental review instruction sent to Codex

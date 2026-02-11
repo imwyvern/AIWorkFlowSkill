@@ -1,15 +1,17 @@
 {
   "project": ".autopilot",
-  "phase": "dev",
+  "phase": "review",
   "phases": {
     "dev": {
       "status": "in_progress",
-      "last_commit": "5655c6f96960343160fdc01e0ace4b0c1a4741d7",
+      "last_commit": "4e61883ac8fe81ddb666a84cbf10fa01f17561de",
       "new_commits": 1,
-      "since_review": 24
+      "since_review": 25
     },
     "review": {
-      "status": "pending"
+      "status": "in_progress",
+      "round": 1,
+      "since_review": 25
     },
     "test": {
       "status": "pending"
@@ -18,17 +20,19 @@
       "status": "pending"
     },
     "prd": {
-      "status": "pending"
+      "status": "verified",
+      "last_result": "pass",
+      "last_verified_at": "2026-02-11T18:59:43Z"
     }
   },
-  "updated_at": "2026-02-11T18:21:01Z",
+  "updated_at": "2026-02-11T18:59:43Z",
   "autopilot": {
-    "last_event": "nudge_sent",
-    "last_sync_at": "2026-02-11T18:21:01Z",
+    "last_event": "review_triggered",
+    "last_sync_at": "2026-02-11T18:59:43Z",
     "last_window": "autopilot-dev",
     "last_state": "idle",
-    "last_head": "5655c6f96960343160fdc01e0ace4b0c1a4741d7",
-    "last_since_review": 24,
+    "last_head": "4e61883ac8fe81ddb666a84cbf10fa01f17561de",
+    "last_since_review": 25,
     "last_new_commits": 1,
     "last_reason": "idle",
     "nudge_count": 6
