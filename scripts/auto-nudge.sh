@@ -1,0 +1,120 @@
+#!/bin/bash
+# auto-nudge.sh v3 — 自动检测并处理 Codex session 各种状态
+# 用法: auto-nudge.sh <window_name> <project_dir> [nudge_message]
+#
+# 状态处理：
+#   working              → 不干预
+#   idle                 → 发送 nudge
+#   idle_low_context     → /compact → 等待 → 重新检测 → nudge
+#   permission           → Enter
+#   permission_with_remember → Down + Enter (永久允许)
+#   shell                → resume --last，失败则新建 session
+#   absent               → 报错
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TMUX="/opt/homebrew/bin/tmux"
+CODEX="/opt/homebrew/bin/codex"
+SESSION="autopilot"
+
+WINDOW="${1:?用法: auto-nudge.sh <window> <project_dir> [nudge_message]}"
+PROJECT_DIR="${2:?缺少项目目录}"
+NUDGE="${3:-先 git add -A && git commit 提交改动，然后继续推进下一项任务}"
+
+# ---- 持久化状态目录（不用 /tmp，重启不丢失）----
+STATE_DIR="$HOME/.autopilot/state"
+mkdir -p "$STATE_DIR"
+COMPACT_FLAG="$STATE_DIR/${WINDOW}.compact_sent"
+
+
+# ---- 辅助函数 ----
+get_status() {
+    "$SCRIPT_DIR/codex-status.sh" "$WINDOW" 2>&1 || true
+}
+
+get_field() {
+    echo "$1" | grep -o "\"$2\":\"[^\"]*\"" | head -1 | cut -d'"' -f4 || echo ""
+}
+
+get_last_commit() {
+    cd "$PROJECT_DIR" && git log --oneline -1 --format="%h %ar: %s" 2>/dev/null || echo "无 commit"
+}
+
+# ---- 检测状态 ----
+STATUS_JSON=$(get_status)
+STATUS=$(get_field "$STATUS_JSON" "status")
+CONTEXT=$(get_field "$STATUS_JSON" "context")
+LAST_COMMIT=$(get_last_commit)
+
+case "$STATUS" in
+  working)
+    rm -f "$COMPACT_FLAG"
+    echo "✅ $WINDOW: 工作中 ($CONTEXT) | 最近 commit: $LAST_COMMIT"
+    exit 0
+    ;;
+
+  idle_low_context)
+    # 检查是否刚发过 compact
+    if [ -f "$COMPACT_FLAG" ]; then
+      FLAG_AGE=$(( $(date +%s) - $(stat -f %m "$COMPACT_FLAG" 2>/dev/null || echo 0) ))
+      if [ "$FLAG_AGE" -lt 600 ]; then
+        # compact 已触发过但 context 仍低 → 直接 nudge（compact 可能已完成但 context 恢复后又用掉了）
+        echo "⚠️ $WINDOW: 低 context ($CONTEXT)，compact 已触发 ${FLAG_AGE}s 前，发 nudge..."
+        "$SCRIPT_DIR/tmux-send.sh" "$WINDOW" "$NUDGE"
+        echo "📤 已发送: $NUDGE"
+        echo "📝 最近 commit: $LAST_COMMIT"
+        exit 0
+      fi
+    fi
+
+    # 发送 /compact
+    echo "🗜️ $WINDOW: 低 context ($CONTEXT)，触发 /compact..."
+    "$SCRIPT_DIR/tmux-send.sh" "$WINDOW" "/compact"
+    touch "$COMPACT_FLAG"
+    echo "📝 最近 commit: $LAST_COMMIT"
+
+    # 不再 sleep 等待，靠下一轮 cron 自然检测 compact 完成后 nudge
+    echo "⏳ compact 已触发，下轮检测时自动 nudge"
+    exit 0
+    ;;
+
+  idle)
+    rm -f "$COMPACT_FLAG"
+    echo "⚠️ $WINDOW: 空转 ($CONTEXT)，发送 nudge..."
+    "$SCRIPT_DIR/tmux-send.sh" "$WINDOW" "$NUDGE"
+    echo "📤 已发送: $NUDGE"
+    echo "📝 最近 commit: $LAST_COMMIT"
+    exit 0
+    ;;
+
+  permission|permission_with_remember)
+    echo "🔑 $WINDOW: 卡在权限确认，选永久允许 (p)..."
+    # 与 watchdog.sh 共享锁，防止同时操作
+    LOCK_DIR="$HOME/.autopilot/locks"
+    mkdir -p "$LOCK_DIR"
+    SAFE_NAME=$(echo "$WINDOW" | tr -cd 'a-zA-Z0-9_-')
+    LOCK_D="${LOCK_DIR}/${SAFE_NAME}.lock.d"
+    if mkdir "$LOCK_D" 2>/dev/null; then
+      "$TMUX" send-keys -t "${SESSION}:${WINDOW}" "p" Enter
+      rm -rf "$LOCK_D"
+    else
+      echo "⏭ 已被 watchdog 处理"
+    fi
+    echo "📝 最近 commit: $LAST_COMMIT"
+    exit 0
+    ;;
+
+  shell)
+    echo "🔄 $WINDOW: Codex 已退出，尝试 resume..."
+    # 策略：先尝试 resume --last（保留上下文），失败则新建
+    "$TMUX" send-keys -t "${SESSION}:${WINDOW}" "cd $PROJECT_DIR && $CODEX resume --last 2>/dev/null || $CODEX --full-auto" Enter
+    echo "📝 最近 commit: $LAST_COMMIT"
+    exit 0
+    ;;
+
+  *)
+    echo "❌ $WINDOW: 异常状态 — $STATUS_JSON"
+    exit 1
+    ;;
+esac

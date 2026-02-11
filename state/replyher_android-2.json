@@ -1,0 +1,10 @@
+{
+  "status": "absent",
+  "context_num": -1,
+  "head": "1baf7bf",
+  "commit_msg": "feat(dict): add dual-metric scale target verification",
+  "commit_time": 1770823833,
+  "commits_30m": 2,
+  "working_no_commit": 0,
+  "last_check": 1770824854
+}

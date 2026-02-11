@@ -1,0 +1,1 @@
+你刚完成 context compaction。请先：1) cat CONVENTIONS.md（重新加载编码规范）2) cat prd-todo.md（确认下一个待办）3) git log -5（了解最近做了什么）。然后继续实现 prd-todo.md 中的下一项任务。

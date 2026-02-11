@@ -1,0 +1,10 @@
+{
+  "status": "absent",
+  "context_num": -1,
+  "head": "5a94a40",
+  "commit_msg": "feat(chain-v2): share chainId fallback and cover anchor record path",
+  "commit_time": 1770818008,
+  "commits_30m": 0,
+  "working_no_commit": 0,
+  "last_check": 1770824854
+}

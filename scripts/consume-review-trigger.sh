@@ -1,0 +1,224 @@
+#!/bin/bash
+# consume-review-trigger.sh — cron 端消费 watchdog 写的增量 review trigger
+#
+# 由 monitor-all.sh 或 cron 调用。
+# 检查 review-trigger-* 文件，执行增量 review，成功后重置 watchdog 计数。
+
+set -u
+
+SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)}"
+
+# 数字清洗
+normalize_int() {
+    local val
+    val=$(echo "$1" | tr -dc '0-9')
+    echo "${val:-0}"
+}
+STATE_DIR="$HOME/.autopilot/state"
+COMMIT_COUNT_DIR="$STATE_DIR/watchdog-commits"
+LOG="$HOME/.autopilot/logs/watchdog.log"
+LOCK_DIR="$HOME/.autopilot/locks"
+REVIEW_LOCK="${LOCK_DIR}/consume-review-trigger.lock.d"
+mkdir -p "$STATE_DIR" "$COMMIT_COUNT_DIR" "$(dirname "$LOG")" "$LOCK_DIR"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [review-consumer] $*" >> "$LOG"
+}
+
+now_ts() {
+    date +%s
+}
+
+is_codex_idle() {
+    local window="$1" status_json status
+    [ -x "${SCRIPT_DIR}/codex-status.sh" ] || return 1
+    status_json=$("${SCRIPT_DIR}/codex-status.sh" "$window" 2>/dev/null || echo '{"status":"absent"}')
+    status=$(echo "$status_json" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+    [ "$status" = "idle" ]
+}
+
+wait_for_non_empty_file() {
+    local file="$1" timeout_secs="$2"
+    local waited=0
+
+    while [ "$waited" -lt "$timeout_secs" ]; do
+        [ -s "$file" ] && return 0
+        sleep 5
+        waited=$((waited + 5))
+    done
+
+    return 1
+}
+
+sync_project_status() {
+    local project_dir="$1" event="$2"
+    shift 2 || true
+    if [ -x "${SCRIPT_DIR}/status-sync.sh" ]; then
+        "${SCRIPT_DIR}/status-sync.sh" "$project_dir" "$event" "$@" >/dev/null 2>&1 || true
+    fi
+}
+
+acquire_script_lock() {
+    if mkdir "$REVIEW_LOCK" 2>/dev/null; then
+        echo "$$" > "${REVIEW_LOCK}/pid"
+        return 0
+    fi
+
+    local existing_pid
+    existing_pid=$(cat "${REVIEW_LOCK}/pid" 2>/dev/null || echo 0)
+    existing_pid=$(normalize_int "$existing_pid")
+
+    if [ "$existing_pid" -gt 0 ] && kill -0 "$existing_pid" 2>/dev/null; then
+        log "⏭ lock held by pid ${existing_pid}, skip this round"
+        return 1
+    fi
+
+    rm -rf "$REVIEW_LOCK" 2>/dev/null || true
+    if mkdir "$REVIEW_LOCK" 2>/dev/null; then
+        echo "$$" > "${REVIEW_LOCK}/pid"
+        log "🔓 reclaimed stale lock from pid ${existing_pid}"
+        return 0
+    fi
+
+    log "⚠️ failed to acquire review consumer lock"
+    return 1
+}
+
+if ! acquire_script_lock; then
+    exit 0
+fi
+trap 'rm -rf "$REVIEW_LOCK" 2>/dev/null || true' EXIT
+
+# 扫描所有 trigger 文件
+for trigger_file in "${STATE_DIR}"/review-trigger-*; do
+    [ -f "$trigger_file" ] || continue
+
+    safe=$(basename "$trigger_file" | sed 's/review-trigger-//')
+    project_dir=$(cat "$trigger_file")
+
+    if [ ! -d "$project_dir" ]; then
+        log "⚠️ ${safe}: project dir not found: ${project_dir}"
+        rm -f "$trigger_file"
+        continue
+    fi
+
+    log "🔍 ${safe}: consuming incremental review trigger for ${project_dir}"
+
+    # 记录 review 开始
+    review_commit=$(git -C "$project_dir" rev-parse HEAD 2>/dev/null)
+    last_review=$(cat "${project_dir}/.last-review-commit" 2>/dev/null || git -C "$project_dir" log -50 --format="%H" 2>/dev/null | tail -1)
+    review_output_file="${STATE_DIR}/layer2-review-${safe}.txt"
+
+    # M-5: 非 idle 不消费 trigger，留待下轮
+    if ! is_codex_idle "$safe"; then
+        log "⏭ ${safe}: Codex not idle, keep trigger for next round"
+        continue
+    fi
+
+    # Layer 1: 快速自动扫描
+    local_issues=""
+
+    if [ -f "${project_dir}/tsconfig.json" ]; then
+        tsc_errors=$(cd "$project_dir" && npx tsc --noEmit 2>&1 | grep -c "error TS" 2>/dev/null || true)
+        tsc_errors=$(normalize_int "$tsc_errors")
+        if [ "$tsc_errors" -gt 0 ]; then
+            local_issues="${local_issues}tsc: ${tsc_errors} errors. "
+        fi
+    fi
+
+    danger=$(cd "$project_dir" && git grep -nI -E '\beval\s*\(' -- '*.ts' '*.tsx' 2>/dev/null | grep -vc "test\|spec\|mock" 2>/dev/null || true)
+    danger=$(normalize_int "$danger")
+    if [ "$danger" -gt 0 ]; then
+        local_issues="${local_issues}eval: ${danger}处. "
+    fi
+
+    # 获取变更文件列表
+    changed_files=""
+    if [ -n "$last_review" ] && git -C "$project_dir" cat-file -e "$last_review" 2>/dev/null; then
+        changed_files=$(git -C "$project_dir" diff "${last_review}..HEAD" --name-only --diff-filter=ACMR 2>/dev/null | head -10)
+    else
+        changed_files=$(git -C "$project_dir" diff HEAD~15..HEAD --name-only --diff-filter=ACMR 2>/dev/null | head -10)
+    fi
+
+    layer2_completed=false
+    layer2_issues=""
+    window="$safe"
+
+    if [ -n "$changed_files" ]; then
+        file_list=$(echo "$changed_files" | tr '\n' ', ' | cut -c1-140)
+        review_msg="执行增量review(P0-P3)。把结果写入 ${review_output_file}；如果无问题仅写 CLEAN。仅审查: ${file_list}"
+
+        if [ ! -x "${SCRIPT_DIR}/tmux-send.sh" ]; then
+            log "⏭ ${safe}: tmux-send.sh missing, keep trigger"
+            continue
+        fi
+
+        rm -f "$review_output_file"
+        if "${SCRIPT_DIR}/tmux-send.sh" "$window" "$review_msg" >/dev/null 2>&1; then
+            log "📤 ${safe}: Layer 2 incremental review instruction sent to Codex"
+        else
+            log "⏭ ${safe}: failed to send Layer 2 instruction, keep trigger"
+            continue
+        fi
+
+        # M-1: 必须等 Layer2 输出文件存在且非空，才允许判定 clean/reset
+        if ! wait_for_non_empty_file "$review_output_file" 90; then
+            log "⏭ ${safe}: Layer 2 output missing/empty after 90s, keep trigger"
+            continue
+        fi
+
+        layer2_raw=$(cat "$review_output_file" 2>/dev/null || echo "")
+        layer2_raw_flat=$(echo "$layer2_raw" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
+        if ! echo "$layer2_raw_flat" | grep -qE '^[[:space:]]*CLEAN[[:space:]]*$'; then
+            layer2_issues="layer2: ${layer2_raw_flat:0:400}. "
+        fi
+        layer2_completed=true
+    else
+        # 无增量文件时不阻塞消费
+        layer2_completed=true
+    fi
+
+    combined_issues="${local_issues}${layer2_issues}"
+
+    if [ "$layer2_completed" != "true" ]; then
+        log "⏭ ${safe}: layer2 not completed, keep trigger"
+        continue
+    fi
+
+    if [ -n "$combined_issues" ]; then
+        log "⚠️ ${safe}: review found issues: ${combined_issues}"
+        # 有问题时写 issues 文件供 watchdog nudge 修复，不重置计数
+        echo "$combined_issues" > "${STATE_DIR}/autocheck-issues-${safe}.tmp" && mv -f "${STATE_DIR}/autocheck-issues-${safe}.tmp" "${STATE_DIR}/autocheck-issues-${safe}"
+        log "⚠️ ${safe}: issues written for watchdog nudge, counters NOT reset"
+        # 仍然更新 review 时间戳（防止 2 小时兜底反复触发同一批问题）
+        now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
+        sync_project_status "$project_dir" "review_issues" "window=${window}" "issues=${combined_issues}" "state=idle"
+    else
+        log "✅ ${safe}: review clean"
+        # Phase 2: review 成功且无问题 → 重置计数和时间戳
+        echo 0 > "${COMMIT_COUNT_DIR}/${safe}-since-review"
+        now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
+        sync_project_status "$project_dir" "review_clean" "window=${window}" "state=idle"
+    fi
+
+    # 记录 review commit 点
+    if [ -n "$review_commit" ]; then
+        echo "$review_commit" > "${project_dir}/.last-review-commit"
+    fi
+
+    # 写 review 历史
+    review_dir="${project_dir}/.code-review"
+    mkdir -p "$review_dir" 2>/dev/null
+    cat > "${review_dir}/$(date '+%Y-%m-%d').json" <<EOF
+{"date":"$(date '+%Y-%m-%d')","type":"incremental","issues":"${combined_issues:-none}","commit":"${review_commit}"}
+EOF
+
+    # 清理 trigger 文件（mv 替代 rm 防 race condition）
+    mv -f "$trigger_file" "${trigger_file}.done" 2>/dev/null
+    rm -f "${trigger_file}.done" 2>/dev/null
+    if [ -n "$combined_issues" ]; then
+        log "✅ ${safe}: review consumed, counters not reset"
+    else
+        log "✅ ${safe}: review consumed, counters reset"
+    fi
+done
