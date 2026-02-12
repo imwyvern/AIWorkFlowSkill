@@ -1,12 +1,12 @@
 {
   "project": ".autopilot",
-  "phase": "review",
+  "phase": "dev",
   "phases": {
     "dev": {
       "status": "in_progress",
-      "last_commit": "4990314cf372a481907eaa77e7b77ad8f104102c",
-      "new_commits": 2,
-      "since_review": 46
+      "last_commit": "9839b387a8fa282400e14763c32b1c059e62b789",
+      "new_commits": 1,
+      "since_review": 47
     },
     "review": {
       "status": "in_progress",
@@ -25,20 +25,20 @@
     "prd": {
       "status": "verified",
       "last_result": "pass",
-      "last_verified_at": "2026-02-12T13:54:30Z"
+      "last_verified_at": "2026-02-12T14:04:56Z"
     }
   },
-  "updated_at": "2026-02-12T14:01:58Z",
+  "updated_at": "2026-02-12T14:12:44Z",
   "autopilot": {
     "last_event": "nudge_sent",
-    "last_sync_at": "2026-02-12T14:01:58Z",
+    "last_sync_at": "2026-02-12T14:12:44Z",
     "last_window": "autopilot-dev",
     "last_state": "idle",
-    "last_head": "4990314cf372a481907eaa77e7b77ad8f104102c",
-    "last_since_review": 46,
-    "last_new_commits": 2,
+    "last_head": "9839b387a8fa282400e14763c32b1c059e62b789",
+    "last_since_review": 47,
+    "last_new_commits": 1,
     "last_reason": "git_dirty",
-    "nudge_count": 26,
+    "nudge_count": 27,
     "last_issues": "layer2: CLEAN range: git diff c3161cca7d68d1df08e58d8658b3a66319bf3ae8..HEAD --name-only --diff-filter=ACMR head: f824728a95e989c41cb11b97bec316a57a58c3a6 files_reviewed: 62 notes: monitor-all report now emphasizes lifecycle phase, review s",
     "unknown_event_count": 3,
     "last_unknown_event": "nudge_blocked_manual",
