@@ -195,9 +195,13 @@ load_projects() {
 send_tmux_message() {
     local window="$1" message="$2" action="$3"
     local output rc
+    local safe_w
+    safe_w=$(echo "$window" | tr -cd 'a-zA-Z0-9_-')
 
     output=$("$SCRIPT_DIR/tmux-send.sh" "$window" "$message" 2>&1)
     rc=$?
+    # 清除 tmux-send 写的 manual-task 标记（这是 watchdog 自己发的，不是人工的）
+    rm -f "${STATE_DIR}/manual-task-${safe_w}" 2>/dev/null
     if [ "$rc" -ne 0 ]; then
         output=$(echo "$output" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
         log "❌ ${window}: ${action} send failed (rc=${rc}) — ${output:0:160}"
@@ -535,6 +539,23 @@ handle_idle() {
         in_cooldown "$prd_done_cooldown_key" 1800 && return
         set_cooldown "$prd_done_cooldown_key"
         log "ℹ️ ${window}: PRD complete, no pending issues, low-freq nudge"
+    fi
+
+    # 检查是否有手动任务在 pending（5 分钟内发的手动消息 → 暂停 nudge）
+    local manual_task_file="${STATE_DIR}/manual-task-${safe}"
+    if [ -f "$manual_task_file" ]; then
+        local manual_ts
+        manual_ts=$(cat "$manual_task_file" 2>/dev/null || echo 0)
+        manual_ts=$(normalize_int "$manual_ts")
+        local manual_age=$(( $(now_ts) - manual_ts ))
+        if [ "$manual_age" -lt 300 ]; then
+            log "⏭ ${window}: manual task sent ${manual_age}s ago, skipping nudge"
+            release_lock "$safe" 2>/dev/null || true
+            return
+        else
+            # 超过 5 分钟，清理标记
+            rm -f "$manual_task_file"
+        fi
     fi
 
     # 指数退避: nudge 次数越多，冷却越长 (300, 600, 1200, 2400, 4800, 9600)

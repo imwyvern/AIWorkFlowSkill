@@ -95,6 +95,9 @@ if [ ${#SINGLE_LINE} -le $MAX_DIRECT ]; then
     sleep 0.2
     "$TMUX" send-keys -t "${SESSION}:${WINDOW}" Enter
     echo "OK: 已发送 ${#SINGLE_LINE} 字符到 ${SESSION}:${WINDOW}"
+    # 标记手动任务发送，watchdog 暂停 nudge 5 分钟
+    mkdir -p "$HOME/.autopilot/state" 2>/dev/null
+    date +%s > "$HOME/.autopilot/state/manual-task-${SAFE_WINDOW}"
 else
     # 长消息：通过 tmux paste-buffer 直接粘贴（与用户手动粘贴等效）
     TMPFILE=$(mktemp /tmp/tmux-paste.XXXXXX)
@@ -108,4 +111,7 @@ else
     sleep 0.3
     "$TMUX" send-keys -t "${SESSION}:${WINDOW}" Enter
     echo "OK: 长消息(${#SINGLE_LINE}字符)通过 paste-buffer 发送到 ${SESSION}:${WINDOW}"
+    # 标记手动任务发送，watchdog 暂停 nudge 5 分钟
+    mkdir -p "$HOME/.autopilot/state" 2>/dev/null
+    date +%s > "$HOME/.autopilot/state/manual-task-${SAFE_WINDOW}"
 fi

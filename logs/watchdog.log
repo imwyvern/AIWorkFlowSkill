@@ -2906,3 +2906,7 @@
 [2026-02-12 04:31:49] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
 [2026-02-12 04:31:49] [review-consumer] 🔍 replyher_android-2: consuming incremental review trigger for /Users/wes/replyher_android-2
 [2026-02-12 04:31:49] [review-consumer] ⏭ replyher_android-2: Codex not idle, keep trigger for next round
+[2026-02-12 04:32:29] 📝 autopilot-dev: new commit (+1, total since review: 41) — fix(monitor): grep JSON parsing broke with jq pretty-print output
+[2026-02-12 04:33:24] ✅ autopilot-dev: PRD verify passed for 88b6a6c
+[2026-02-12 04:35:27] 🗜 Shike: sent /compact
+[2026-02-12 04:35:47] 📝 replyher_android-2: new commit (+1, total since review: 52) — fix: refine key popup display
