@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-02-12T11:27:18Z",
+    "generated_at": "2026-02-12T11:35:17Z",
     "project_dir": "/Users/wes/.autopilot",
     "items_file": "/Users/wes/.autopilot/prd-items.yaml",
     "version": "v1.0.0",
@@ -12,8 +12,17 @@
     "changed_files_filter": [
       "logs/watchdog.log",
       "prd-progress.json",
+      "scripts/auto-nudge.sh",
+      "scripts/codex-status.sh",
       "scripts/consume-review-trigger.sh",
+      "scripts/monitor-all.sh",
       "scripts/watchdog.sh",
+      "state/.last_report",
+      "state/Shike.json",
+      "state/agent-simcity.json",
+      "state/autopilot-dev.json",
+      "state/replyher_android-2.json",
+      "state/watchdog-activity/Shike",
       "state/watchdog-activity/autopilot-dev",
       "state/watchdog-activity/idle-probe-Shike",
       "state/watchdog-activity/idle-probe-agent-simcity",
@@ -22,6 +31,10 @@
       "state/watchdog-commits/autopilot-dev-head",
       "state/watchdog-commits/autopilot-dev-since-review",
       "state/watchdog-cooldown/autocheck-autopilot-dev",
+      "state/watchdog-cooldown/nudge-Shike",
+      "state/watchdog-cooldown/nudge-autopilot-dev",
+      "state/watchdog-cooldown/nudge-count-Shike",
+      "state/watchdog-cooldown/nudge-count-autopilot-dev",
       "status.json"
     ],
     "only_type": "all",

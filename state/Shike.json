@@ -1,11 +1,11 @@
 {
-  "status": "idle",
-  "context_num": 53,
+  "status": "absent",
+  "context_num": -1,
   "head": "9dbb14a",
   "commit_msg": "chore(api): enforce prisma sqlite/postgres schema parity",
   "commit_time": 1770895346,
-  "commits_30m": 2,
+  "commits_30m": 1,
   "working_no_commit": 0,
   "tokens_today": 0,
-  "last_check": 1770895812
+  "last_check": 1770897011
 }
