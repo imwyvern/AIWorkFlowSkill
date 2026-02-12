@@ -533,18 +533,27 @@ handle_idle() {
     if [ -f "${STATE_DIR}/prd-issues-${safe}" ]; then
         has_pending_work=true
     fi
+    # 提前检查队列（用于后续绕过判断）
+    local has_queue_task_early=false
+    local queue_peek
+    queue_peek=$("${SCRIPT_DIR}/task-queue.sh" next "$safe" 2>/dev/null || true)
+    [ -n "$queue_peek" ] && has_queue_task_early=true
+
     if is_prd_todo_complete "$project_dir" && [ "$has_pending_work" = "false" ]; then
-        # PRD 完成 + 无 pending issues → 检查 review 状态决定下一步
         local review_file="${STATE_DIR}/layer2-review-${safe}.txt"
         if [ -f "$review_file" ] && ! grep -qi "CLEAN" "$review_file" 2>/dev/null; then
-            # review 有问题 → 正常 nudge 频率修复
             log "ℹ️ ${window}: PRD complete but review has issues, normal nudge"
         else
-            # 真的没事做了 → 降低频率（每 10 分钟一次）
-            local prd_done_cooldown_key="prd-done-nudge-${safe}"
-            in_cooldown "$prd_done_cooldown_key" 600 && return
-            set_cooldown "$prd_done_cooldown_key"
-            log "ℹ️ ${window}: PRD complete + review clean, low-freq nudge"
+            if [ "$has_queue_task_early" = "true" ]; then
+                # 队列有任务 → 绕过 prd-done 冷却
+                log "📋 ${window}: PRD done but queue has tasks, bypassing prd-done cooldown"
+            else
+                # 真的没事做了 → 降低频率（每 10 分钟一次）
+                local prd_done_cooldown_key="prd-done-nudge-${safe}"
+                in_cooldown "$prd_done_cooldown_key" 600 && return
+                set_cooldown "$prd_done_cooldown_key"
+                log "ℹ️ ${window}: PRD complete + review clean, low-freq nudge"
+            fi
         fi
     fi
 
