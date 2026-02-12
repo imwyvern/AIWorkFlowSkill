@@ -304,7 +304,15 @@ for entry in "${PROJECTS[@]}"; do
     fi
     PHASE_TRACKING+=("$PHASE_SUMMARY")
     REVIEW_STATUS_TRACKING+=("$REVIEW_SUMMARY")
-    PROJECT_LINE="${STATUS_EMOJI} ${WINDOW}: ${CUR_STATUS} | phase ${PHASE_SUMMARY:-unknown} | review ${REVIEW_SUMMARY:-pending} | c30m ${COMMITS_30M} | tok/day ${TOKENS_TODAY_HUMAN}"
+    # 队列任务信息
+    QUEUE_COUNT=$("${SCRIPT_DIR}/task-queue.sh" count "$SAFE_WINDOW" 2>/dev/null || echo 0)
+    QUEUE_IN_PROGRESS=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${SAFE_WINDOW}.md" 2>/dev/null || echo 0)
+    QUEUE_INFO=""
+    if [ "$QUEUE_COUNT" -gt 0 ] || [ "$QUEUE_IN_PROGRESS" -gt 0 ]; then
+        QUEUE_INFO=" | 📋q:${QUEUE_COUNT}待/${QUEUE_IN_PROGRESS}进"
+    fi
+
+    PROJECT_LINE="${STATUS_EMOJI} ${WINDOW}: ${CUR_STATUS} | phase ${PHASE_SUMMARY:-unknown} | review ${REVIEW_SUMMARY:-pending} | c30m ${COMMITS_30M} | tok/day ${TOKENS_TODAY_HUMAN}${QUEUE_INFO}"
     [ -n "$CUR_COMMIT_MSG" ] && PROJECT_LINE="${PROJECT_LINE} | ${CUR_COMMIT_MSG}"
     [ -n "$LIFECYCLE" ] && PROJECT_LINE="${PROJECT_LINE}"$'\n'"  ${LIFECYCLE}"
 
