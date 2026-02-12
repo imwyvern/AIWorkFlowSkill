@@ -1,11 +1,11 @@
 {
   "status": "idle",
-  "context_num": 56,
-  "head": "1347c44",
-  "commit_msg": "fix(nudge): reset backoff on review CLEAN, per Codex review suggestion",
-  "commit_time": 1770900587,
-  "commits_30m": 4,
+  "context_num": 54,
+  "head": "4990314",
+  "commit_msg": "chore: add .gitignore for runtime state, add skills optimization doc",
+  "commit_time": 1770904350,
+  "commits_30m": 1,
   "working_no_commit": 0,
-  "tokens_today": 15198480,
-  "last_check": 1770900612
+  "tokens_today": 15690321,
+  "last_check": 1770904814
 }

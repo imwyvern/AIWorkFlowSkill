@@ -2948,3 +2948,35 @@
 [2026-02-12 04:51:16] ✅ autopilot-dev: PRD verify passed for 1347c44
 [2026-02-12 04:51:47] 🛑 Received SIGTERM, shutting down...
 [2026-02-12 04:51:49] 🚀 Watchdog v4 started (tick=10s, idle_threshold=300s, idle_confirm=3, inertia=90s, projects=4, pid=34234)
+[2026-02-12 05:52:43] ✅ autopilot-dev: idle nudge ack by new commit (886a29d→4990314)
+[2026-02-12 05:52:43] 🔄 Shike: post-compact recovery nudge sent
+[2026-02-12 05:52:44] 📊 agent-simcity: state=idle
+[2026-02-12 05:52:54] ✅ Shike: post-compact recovery nudge ack by working state
+[2026-02-12 05:52:54] ℹ️ agent-simcity: PRD complete + review clean, low-freq nudge
+[2026-02-12 05:53:14] 🛑 agent-simcity: manual block detected (manually scan specific files next. ) — pausing nudges
+[2026-02-12 05:53:14] 📊 replyher_android-2: state=idle
+[2026-02-12 05:53:25] 📝 replyher_android-2: new commit (+1, total since review: 54) — docs: complete P1 input enhancements
+[2026-02-12 05:53:25] 📋 replyher_android-2: prd-todo.md updated, 1 items remaining — resetting nudge
+[2026-02-12 05:53:25] 📊 autopilot-dev: state=idle
+[2026-02-12 05:53:35] 📝 autopilot-dev: new commit (+2, total since review: 46) — chore: add .gitignore for runtime state, add skills optimization doc
+[2026-02-12 05:54:30] ✅ autopilot-dev: PRD verify passed for 4990314
+[2026-02-12 05:54:30] 🔍 autopilot-dev: incremental review triggered (46 commits, 29034s since last review)
+[2026-02-12 05:54:50] 📝 Shike: new commit (+4, total since review: 57) — chore(status): record latest runtime state
+[2026-02-12 05:58:13] ℹ️ Shike: PRD complete + review clean, low-freq nudge
+[2026-02-12 05:58:54] 🛠 replyher_android-2: dirty tree detected before idle nudge; nudging to commit
+[2026-02-12 05:58:55] 📤 replyher_android-2: auto-nudged #1 (idle 310s) — 当前仓库存在未提交改动（?? status.json），请先提交/暂存再�
+[2026-02-12 05:59:05] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-12 06:00:14] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
+[2026-02-12 06:00:14] [review-consumer] ⏭ Shike: Codex not idle, keep trigger for next round
+[2026-02-12 06:00:14] [review-consumer] 🔍 agent-simcity: consuming incremental review trigger for /Users/wes/projects/agent-simcity
+[2026-02-12 06:00:14] [review-consumer] ⏭ agent-simcity: Codex not idle, keep trigger for next round
+[2026-02-12 06:00:14] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 06:00:14] [review-consumer] ⚠️ autopilot-dev: review in-progress stale (1083s), retrying
+[2026-02-12 06:00:15] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
+[2026-02-12 06:00:15] [review-consumer] 🔍 replyher_android-2: consuming incremental review trigger for /Users/wes/replyher_android-2
+[2026-02-12 06:00:15] [review-consumer] ⏭ replyher_android-2: Codex not idle, keep trigger for next round
+[2026-02-12 06:01:37] ℹ️ autopilot-dev: PRD complete + review clean, low-freq nudge
+[2026-02-12 06:01:58] 🛠 autopilot-dev: dirty tree detected before idle nudge; nudging to commit
+[2026-02-12 06:01:58] 📤 autopilot-dev: auto-nudged #1 (idle 482s) — 当前仓库存在未提交改动（ M logs/watchdog.log  M prd-progress.json  M
+[2026-02-12 06:02:39] ⏭ replyher_android-2: manual task sent 20s ago, skipping nudge
+[2026-02-12 06:03:20] ℹ️ agent-simcity: PRD complete + review clean, low-freq nudge

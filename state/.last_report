@@ -2,27 +2,26 @@
   "lastStatus": "ok",
   "error": "",
   "wakeMode": "now",
-  "generated_at": "2026-02-12T12:50:12Z",
+  "generated_at": "2026-02-12T14:00:14Z",
   "summary": [
-    "📊 monitor 2026-02-12 04:50 | progress 3/4 | working 1 idle 3 permission 0 shell 0 absent 0",
-    "🧠 daily tokens 2026-02-12: total 45.51M | input 45.33M | cached 39.83M | output 179.4k | reasoning 130.7k | top replyher_android-2 23.97M",
-    "⚠️ Shike: idle | phase dev | review in_progress | c30m 2 | tok/day 0 | chore: checkpoint workspace state",
+    "📊 monitor 2026-02-12 06:00 | progress 3/4 | working 0 idle 4 permission 0 shell 0 absent 0",
+    "🧠 daily tokens 2026-02-12: total 54.47M | input 54.27M | cached 47.99M | output 198.6k | reasoning 141.2k | top replyher_android-2 32.44M",
+    "⚠️ Shike: idle | phase dev | review in_progress | c30m 2 | tok/day 0 | chore(status): record latest runtime state",
     "  🔨dev → 🔍review(2P0 5P1) → ⏳test → ⏳deploy",
     "⚠️ agent-simcity: idle | phase review | review in_progress | c30m 0 | tok/day 6.34M | chore: update status metadata",
     "  🔨dev → 🔍review(0P0 0P1) → 🔧test(1bugs) → ⏳deploy",
-    "✅ replyher_android-2: working | phase dev | review pending | c30m 4 | tok/day 23.97M | feat: add pointer to key preview",
-    "  🔨dev → ⏳review → ⏳test → ⏳deploy",
-    "⚠️ autopilot-dev: idle | phase dev | review in_progress | c30m 4 | tok/day 15.20M | fix(nudge): reset backoff on review CLEAN, per Codex review suggestion",
+    "⚠️ replyher_android-2: idle | phase unknown | review pending | c30m 0 | tok/day 32.44M | docs: complete P1 input enhancements",
+    "⚠️ autopilot-dev: idle | phase review | review in_progress | c30m 1 | tok/day 15.69M | chore: add .gitignore for runtime state, add skills optimization doc",
     "  🔨dev → 🔍review(0P0 0P1) → ⏳test → ⏳deploy"
   ],
   "report": {
-    "generated_at": "2026-02-12T12:50:12Z",
-    "generated_at_local": "2026-02-12 04:50",
+    "generated_at": "2026-02-12T14:00:14Z",
+    "generated_at_local": "2026-02-12 06:00",
     "counts": {
       "total_projects": 4,
       "changed_projects": 3,
-      "working": 1,
-      "idle": 3,
+      "working": 0,
+      "idle": 4,
       "permission": 0,
       "shell": 0,
       "absent": 0
@@ -31,34 +30,34 @@
       "date": "2026-02-12",
       "timezone": "PST",
       "totals": {
-        "input_tokens": 45327366,
-        "cached_input_tokens": 39828352,
-        "output_tokens": 179433,
-        "reasoning_output_tokens": 130688,
-        "total_tokens": 45506799
+        "input_tokens": 54269644,
+        "cached_input_tokens": 47987840,
+        "output_tokens": 198622,
+        "reasoning_output_tokens": 141184,
+        "total_tokens": 54468266
       },
       "projects": [
         {
           "window": "replyher_android-2",
           "dir": "/Users/wes/replyher_android-2",
-          "input_tokens": 23874458,
-          "cached_input_tokens": 21454592,
-          "output_tokens": 93470,
-          "reasoning_output_tokens": 67264,
-          "total_tokens": 23967928,
+          "input_tokens": 32326407,
+          "cached_input_tokens": 29238144,
+          "output_tokens": 111147,
+          "reasoning_output_tokens": 77696,
+          "total_tokens": 32437554,
           "sessions": 1,
-          "last_event": "2026-02-12T12:44:04.594Z"
+          "last_event": "2026-02-12T13:59:18.350Z"
         },
         {
           "window": "autopilot-dev",
           "dir": "/Users/wes/.autopilot",
-          "input_tokens": 15125128,
-          "cached_input_tokens": 13016192,
-          "output_tokens": 73352,
-          "reasoning_output_tokens": 56064,
-          "total_tokens": 15198480,
+          "input_tokens": 15615457,
+          "cached_input_tokens": 13392128,
+          "output_tokens": 74864,
+          "reasoning_output_tokens": 56128,
+          "total_tokens": 15690321,
           "sessions": 1,
-          "last_event": "2026-02-12T12:49:04.327Z"
+          "last_event": "2026-02-12T13:58:52.922Z"
         },
         {
           "window": "agent-simcity",
@@ -85,12 +84,13 @@
       ],
       "top_project": {
         "window": "replyher_android-2",
-        "total_tokens": 23967928
+        "total_tokens": 32437554
       }
     },
     "lifecycle_phase_counts": {
-      "dev": 3,
-      "review": 1
+      "dev": 1,
+      "review": 2,
+      "unknown": 1
     },
     "review_status_counts": {
       "in_progress": 3,

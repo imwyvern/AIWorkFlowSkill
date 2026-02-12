@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-02-12T12:50:31Z",
+    "generated_at": "2026-02-12T13:53:45Z",
     "project_dir": "/Users/wes/.autopilot",
     "items_file": "/Users/wes/.autopilot/prd-items.yaml",
     "version": "v1.0.0",
@@ -10,11 +10,19 @@
     "failed_count": 0,
     "no_checks_count": 0,
     "changed_files_filter": [
-      "NUDGE-GUARD-ANALYSIS.md",
+      ".gitignore",
+      "AUTOPILOT-SKILLS-OPTIMIZATION.md",
+      "locks/watchdog-main.lock.d/pid",
+      "locks/watchdog-main.lock.d/start_sig",
+      "locks/watchdog-main.lock.d/started_at",
       "logs/watchdog.log",
       "prd-progress.json",
-      "scripts/consume-review-trigger.sh",
-      "state/manual-task-autopilot-dev",
+      "scripts/watchdog.sh",
+      "state/.last_report",
+      "state/Shike.json",
+      "state/agent-simcity.json",
+      "state/autopilot-dev.json",
+      "state/replyher_android-2.json",
       "state/watchdog-activity/autopilot-dev",
       "state/watchdog-activity/idle-probe-Shike",
       "state/watchdog-activity/idle-probe-agent-simcity",
@@ -23,40 +31,48 @@
       "state/watchdog-commits/autopilot-dev-head",
       "state/watchdog-commits/autopilot-dev-since-review",
       "state/watchdog-cooldown/autocheck-autopilot-dev",
-      "state/watchdog-cooldown/prd-done-nudge-Shike",
-      "state/watchdog-cooldown/prd-done-nudge-agent-simcity",
-      "status.json",
-      "~/.autopilot/CLAUDE-CODE-REVIEW-R2.md"
+      "state/watchdog-cooldown/nudge-count-replyher_android-2",
+      "state/watchdog-cooldown/nudge-replyher_android-2",
+      "status.json"
     ],
     "only_type": "all",
     "only_ids": []
   },
   "results": [
     {
-      "id": "M-11",
+      "id": "M-10",
       "type": "feature",
       "priority": "P2",
       "severity": null,
-      "title": "Layer2 file list cap no longer limits review scope",
+      "title": "Low-context threshold consistency",
       "status": "passed",
       "configured_status": "verified",
       "iteration": "sprint-2026w06",
       "owner": "autopilot",
       "paths": [
-        "scripts/consume-review-trigger.sh"
+        "scripts/autopilot-constants.sh",
+        "scripts/watchdog.sh",
+        "scripts/codex-status.sh",
+        "scripts/monitor-all.sh"
       ],
       "checks": [
         {
-          "id": "review-range-present",
+          "id": "constants-threshold",
           "type": "file_contains",
           "passed": true,
-          "detail": "matched=True path=scripts/consume-review-trigger.sh"
+          "detail": "matched=True path=scripts/autopilot-constants.sh"
         },
         {
-          "id": "full-scope-message",
+          "id": "watchdog-threshold-link",
           "type": "file_contains",
           "passed": true,
-          "detail": "matched=True path=scripts/consume-review-trigger.sh"
+          "detail": "matched=True path=scripts/watchdog.sh"
+        },
+        {
+          "id": "codex-status-threshold-link",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/codex-status.sh"
         }
       ]
     },

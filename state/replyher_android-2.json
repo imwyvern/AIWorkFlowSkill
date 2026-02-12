@@ -1,11 +1,11 @@
 {
-  "status": "working",
-  "context_num": 54,
-  "head": "b51cc61",
-  "commit_msg": "feat: add pointer to key preview",
-  "commit_time": 1770900236,
-  "commits_30m": 4,
+  "status": "idle",
+  "context_num": 47,
+  "head": "b6af9e8",
+  "commit_msg": "docs: complete P1 input enhancements",
+  "commit_time": 1770901738,
+  "commits_30m": 0,
   "working_no_commit": 0,
-  "tokens_today": 23967928,
-  "last_check": 1770900612
+  "tokens_today": 32437554,
+  "last_check": 1770904814
 }
