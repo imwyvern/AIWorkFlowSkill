@@ -1,5 +1,4 @@
 #!/bin/bash
-# Autopilot v3 launcher for launchd
-# 确保 PATH 包含 homebrew
-export PATH="/opt/homebrew/bin:$PATH"
-cd ~/.autopilot && exec /usr/bin/python3 autopilot.py
+# Autopilot launcher — 启动 watchdog 守护进程
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+exec /bin/bash ~/.autopilot/scripts/watchdog.sh
