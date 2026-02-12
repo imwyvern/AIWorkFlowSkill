@@ -730,10 +730,10 @@ run_prd_checks_for_commit() {
     changed_files=$(echo "$changed_files" | sed '/^$/d')
     [ -z "$changed_files" ] && return
 
-    local changed_csv
-    changed_csv=$(echo "$changed_files" | paste -sd, -)
+    local changed_files_json
+    changed_files_json=$(printf '%s\n' "$changed_files" | python3 -c 'import json,sys; print(json.dumps([line.rstrip("\n") for line in sys.stdin if line.rstrip("\n")], ensure_ascii=False))' 2>/dev/null || echo "[]")
     local verify_output rc
-    verify_output=$(run_with_timeout 45 "${verify_cmd[@]}" --changed-files "$changed_csv" --output "$output_file" --sync-todo --print-failures-only 2>&1)
+    verify_output=$(run_with_timeout 45 "${verify_cmd[@]}" --changed-files "$changed_files_json" --output "$output_file" --sync-todo --print-failures-only 2>&1)
     rc=$?
 
     if [ "$rc" -eq 0 ]; then
