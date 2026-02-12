@@ -2732,3 +2732,19 @@
 [2026-02-12 03:00:12] [review-consumer] ⚠️ Shike: review trigger stale (45780s) — forcing consumption
 [2026-02-12 03:00:12] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
 [2026-02-12 03:00:12] [review-consumer] 📤 Shike: Layer 2 incremental review instruction sent to Codex
+[2026-02-12 03:01:38] 🗜 Shike: sent /compact
+[2026-02-12 03:01:38] 📤 agent-simcity: auto-nudged #1 (idle 2289s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:01:38] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-12 03:01:39] 📤 replyher_android-2: auto-nudged #1 (idle 2175s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:01:39] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-12 03:01:39] 📝 autopilot-dev: new commit (+1, total since review: 32) — fix(codex-status): grep weekly limit crash under set -e (absent false positive)
+[2026-02-12 03:01:39] ✅ autopilot-dev: PRD verify passed for 293cbec
+[2026-02-12 03:01:39] 🔍 autopilot-dev: incremental review triggered (32 commits, 18663s since last review)
+[2026-02-12 03:04:45] 📊 Shike: state=idle
+[2026-02-12 03:04:45] 📊 agent-simcity: state=idle
+[2026-02-12 03:04:45] 📊 replyher_android-2: state=idle
+[2026-02-12 03:04:45] 📊 autopilot-dev: state=idle
+[2026-02-12 03:06:40] 📤 autopilot-dev: auto-nudged #1 (idle 301s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:06:51] 🔄 Shike: post-compact recovery nudge sent
+[2026-02-12 03:06:51] ✅ Shike: post-compact recovery nudge ack by working state
+[2026-02-12 03:07:41] ⚠️ autopilot-dev: idle nudge no-ack in 60s (head/context unchanged)
