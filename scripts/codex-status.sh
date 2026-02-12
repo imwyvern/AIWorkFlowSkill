@@ -34,7 +34,7 @@ if ! "$TMUX" has-session -t "$SESSION" 2>/dev/null; then
     exit 3
 fi
 
-if ! "$TMUX" list-windows -t "$SESSION" -F '#{window_name}' | grep -qx "$WINDOW"; then
+if ! "$TMUX" list-windows -t "$SESSION" -F '#{window_name}' | grep -qFx "$WINDOW"; then
     echo '{"status":"absent","detail":"window not found"}'
     exit 3
 fi

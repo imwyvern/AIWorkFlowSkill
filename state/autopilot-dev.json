@@ -1,11 +1,11 @@
 {
-  "status": "absent",
+  "status": "idle",
   "context_num": -1,
-  "head": "772ee2e",
-  "commit_msg": "feat: skip idle nudge when PRD complete",
-  "commit_time": 1770891862,
-  "commits_30m": 0,
+  "head": "b8721be",
+  "commit_msg": "fix(review-r2): handle_idle accept idle_low_context, remove set -e from monitor-",
+  "commit_time": 1770894564,
+  "commits_30m": 2,
   "working_no_commit": 0,
   "tokens_today": 13194304,
-  "last_check": 1770894012
+  "last_check": 1770895210
 }

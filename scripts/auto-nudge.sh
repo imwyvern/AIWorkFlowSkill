@@ -26,7 +26,19 @@ NUDGE="${3:-先 git add -A && git commit 提交改动，然后继续推进下一
 STATE_DIR="$HOME/.autopilot/state"
 mkdir -p "$STATE_DIR"
 COMPACT_FLAG="$STATE_DIR/${WINDOW}.compact_sent"
+COOLDOWN_DIR="$STATE_DIR/watchdog-cooldown"
 
+# ---- 检查 watchdog 冷却（防止双重 nudge）----
+SAFE_WINDOW=$(echo "$WINDOW" | tr -cd 'a-zA-Z0-9_-')
+WATCHDOG_COOLDOWN_FILE="${COOLDOWN_DIR}/nudge-${SAFE_WINDOW}"
+if [ -f "$WATCHDOG_COOLDOWN_FILE" ]; then
+    last_nudge=$(cat "$WATCHDOG_COOLDOWN_FILE" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    if [ $((now - last_nudge)) -lt 300 ]; then
+        echo "⏭ $WINDOW: watchdog 已在 $((now - last_nudge))s 前 nudge，跳过"
+        exit 0
+    fi
+fi
 
 # ---- 辅助函数 ----
 get_status() {

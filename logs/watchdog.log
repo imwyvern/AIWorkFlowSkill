@@ -2748,3 +2748,30 @@
 [2026-02-12 03:06:51] 🔄 Shike: post-compact recovery nudge sent
 [2026-02-12 03:06:51] ✅ Shike: post-compact recovery nudge ack by working state
 [2026-02-12 03:07:41] ⚠️ autopilot-dev: idle nudge no-ack in 60s (head/context unchanged)
+[2026-02-12 03:09:26] 📝 autopilot-dev: new commit (+1, total since review: 33) — fix(review-r2): handle_idle accept idle_low_context, remove set -e from monitor-all, clean stale triggers
+[2026-02-12 03:09:26] ✅ autopilot-dev: PRD verify passed for b8721be
+[2026-02-12 03:09:57] 📊 Shike: state=working
+[2026-02-12 03:09:57] 📊 agent-simcity: state=idle
+[2026-02-12 03:09:57] 📊 replyher_android-2: state=idle
+[2026-02-12 03:09:57] 📊 autopilot-dev: state=idle
+[2026-02-12 03:10:14] [review-consumer] 🔓 reclaimed stale lock from pid 49527
+[2026-02-12 03:10:14] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 03:10:14] [review-consumer] 📤 autopilot-dev: Layer 2 incremental review instruction sent to Codex
+[2026-02-12 03:14:27] 📤 autopilot-dev: auto-nudged #1 (idle 301s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:15:08] 📊 Shike: state=idle
+[2026-02-12 03:15:09] 📊 agent-simcity: state=idle
+[2026-02-12 03:15:09] 📊 replyher_android-2: state=idle
+[2026-02-12 03:15:09] 📊 autopilot-dev: state=idle
+[2026-02-12 03:15:28] ⚠️ autopilot-dev: idle nudge no-ack in 60s (head/context unchanged)
+[2026-02-12 03:16:01] 📤 agent-simcity: auto-nudged #2 (idle 302s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:16:01] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-12 03:16:12] 📤 replyher_android-2: auto-nudged #2 (idle 302s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:16:12] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-12 03:19:08] 📝 Shike: new commit (+1, total since review: 49) — fix(api): resolve layer2 P1/P2 parity, quota and session cache issues
+[2026-02-12 03:20:11] [review-consumer] 🔓 reclaimed stale lock from pid 73803
+[2026-02-12 03:20:11] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 03:20:11] [review-consumer] 📤 autopilot-dev: Layer 2 incremental review instruction sent to Codex
+[2026-02-12 03:20:21] 📊 Shike: state=idle
+[2026-02-12 03:20:21] 📊 agent-simcity: state=idle
+[2026-02-12 03:20:21] 📊 replyher_android-2: state=idle
+[2026-02-12 03:20:21] 📊 autopilot-dev: state=idle

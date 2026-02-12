@@ -88,7 +88,7 @@ is_codex_idle() {
     [ -x "${SCRIPT_DIR}/codex-status.sh" ] || return 1
     status_json=$("${SCRIPT_DIR}/codex-status.sh" "$window" 2>/dev/null || echo '{"status":"absent"}')
     status=$(echo "$status_json" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
-    [ "$status" = "idle" ]
+    [ "$status" = "idle" ] || [ "$status" = "idle_low_context" ]
 }
 
 wait_for_non_empty_file() {

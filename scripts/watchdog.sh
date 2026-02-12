@@ -471,10 +471,21 @@ handle_permission() {
 handle_idle() {
     local window="$1" safe="$2" project_dir="$3"
 
-    if is_prd_todo_complete "$project_dir"; then
-        log "✅ ${window}: PRD 100% complete, skipping idle nudge"
-        sync_project_status "$project_dir" "nudge_skipped_prd_complete" "window=${window}" "state=idle"
-        return
+    # PRD 完成不代表没事做 — 还有 review fixes、autocheck issues、manual tasks
+    # 只有当 PRD 完成 + 无 pending issues + 无 review issues 时才降低 nudge 频率
+    local has_pending_work=false
+    if [ -f "${STATE_DIR}/autocheck-issues-${safe}" ]; then
+        has_pending_work=true
+    fi
+    if [ -f "${STATE_DIR}/prd-issues-${safe}" ]; then
+        has_pending_work=true
+    fi
+    if is_prd_todo_complete "$project_dir" && [ "$has_pending_work" = "false" ]; then
+        # PRD 完成 + 无 pending issues → 降低 nudge 频率（每 30 分钟最多一次）
+        local prd_done_cooldown_key="prd-done-nudge-${safe}"
+        in_cooldown "$prd_done_cooldown_key" 1800 && return
+        set_cooldown "$prd_done_cooldown_key"
+        log "ℹ️ ${window}: PRD complete, no pending issues, low-freq nudge"
     fi
 
     # 指数退避: nudge 次数越多，冷却越长 (300, 600, 1200, 2400, 4800, 9600)
@@ -884,7 +895,32 @@ get_smart_nudge() {
         remaining=$(grep '^- ' "$prd_todo" | grep -vic '✅\|⛔\|blocked\|done\|完成\|^\- \[x\]\|^\- \[X\]' || true)
         remaining=$(normalize_int "$remaining")
         if [ "$remaining" -eq 0 ]; then
-            echo "所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令。"
+            # PRD 完成 → 检查是否有 review issues 或 autocheck issues 需要修
+            local issues_file="${STATE_DIR}/autocheck-issues-${safe}"
+            local prd_issues_file="${STATE_DIR}/prd-issues-${safe}"
+            if [ -f "$issues_file" ]; then
+                local pending_issues
+                pending_issues=$(cat "$issues_file" | head -c 200)
+                echo "PRD 已完成，但仍有自动检查发现的问题待修复：${pending_issues}"
+                return
+            fi
+            if [ -f "$prd_issues_file" ]; then
+                local pending_prd
+                pending_prd=$(cat "$prd_issues_file" | head -c 200)
+                echo "PRD 已完成，但 PRD checker 仍有失败项：${pending_prd}"
+                return
+            fi
+            # 检查是否有未处理的 review 结果
+            local review_file="${STATE_DIR}/layer2-review-${safe}.txt"
+            if [ -f "$review_file" ]; then
+                local review_content
+                review_content=$(cat "$review_file" 2>/dev/null | head -c 200)
+                if ! echo "$review_content" | grep -qi "CLEAN"; then
+                    echo "PRD 已完成，但上次 review 发现问题需要修复。读 ${review_file} 并修复所有 P1/P2 问题，然后 git commit。"
+                    return
+                fi
+            fi
+            echo "PRD 和 review 均已完成。运行测试确认无回归，检查是否有遗漏的优化项。"
             return
         fi
     fi
