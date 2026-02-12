@@ -2,52 +2,51 @@
   "lastStatus": "ok",
   "error": "",
   "wakeMode": "now",
-  "generated_at": "2026-02-12T12:10:11Z",
+  "generated_at": "2026-02-12T12:31:48Z",
   "summary": [
-    "📊 monitor 2026-02-12 04:10 | progress 2/4 | working 0 idle 0 permission 0 shell 0 absent 4",
-    "🧠 daily tokens 2026-02-12: total 40.00M | input 39.84M | cached 35.29M | output 161.4k | reasoning 118.2k | top replyher_android-2 20.44M",
-    "✅ Shike: absent | phase dev | review in_progress | c30m 0 | tok/day 0 | chore(api): enforce prisma sqlite/postgres schema parity",
+    "📊 monitor 2026-02-12 04:31 | progress 4/4 | working 0 idle 4 permission 0 shell 0 absent 0",
+    "🧠 daily tokens 2026-02-12: total 41.99M | input 41.83M | cached 36.90M | output 164.2k | reasoning 119.7k | top replyher_android-2 21.70M",
+    "⚠️ Shike: idle_low_context | phase dev | review in_progress | c30m 2 | tok/day 0 | fix(web): scope auth inflight cache by token and ignore stale responses",
     "  🔨dev → 🔍review(2P0 5P1) → ⏳test → ⏳deploy",
-    "✅ agent-simcity: absent | phase dev | review pending | c30m 0 | tok/day 5.16M | fix: support 100% tip fee",
-    "  🔨dev → ⏳review → 🔧test(1bugs) → ⏳deploy",
-    "✅ replyher_android-2: absent | phase dev | review in_progress | c30m 1 | tok/day 20.44M | fix: expand keyboard experience",
-    "  🔨dev → 🔍review(2P0 9P1) → 🔧test(2bugs) → ⏳deploy",
-    "✅ autopilot-dev: absent | phase dev | review in_progress | c30m 1 | tok/day 14.39M | fix(suggestion): add jq dependency check in codex-status.sh",
+    "⚠️ agent-simcity: idle | phase review | review in_progress | c30m 1 | tok/day 5.90M | chore: update status metadata",
+    "  🔨dev → 🔍review(0P0 0P1) → 🔧test(1bugs) → ⏳deploy",
+    "⚠️ replyher_android-2: idle | phase unknown | review pending | c30m 2 | tok/day 21.70M | docs: track sliding selection completion",
+    "⚠️ autopilot-dev: idle | phase dev | review in_progress | c30m 3 | tok/day 14.39M | fix: consume-review local-outside-function crash, move notify_review_result to t",
     "  🔨dev → 🔍review(0P0 0P1) → ⏳test → ⏳deploy"
   ],
   "report": {
-    "generated_at": "2026-02-12T12:10:11Z",
-    "generated_at_local": "2026-02-12 04:10",
+    "generated_at": "2026-02-12T12:31:48Z",
+    "generated_at_local": "2026-02-12 04:31",
     "counts": {
       "total_projects": 4,
-      "changed_projects": 2,
+      "changed_projects": 4,
       "working": 0,
-      "idle": 0,
+      "idle": 4,
       "permission": 0,
       "shell": 0,
-      "absent": 4
+      "absent": 0
     },
     "daily_tokens": {
       "date": "2026-02-12",
       "timezone": "PST",
       "totals": {
-        "input_tokens": 39836217,
-        "cached_input_tokens": 35289600,
-        "output_tokens": 161379,
-        "reasoning_output_tokens": 118208,
-        "total_tokens": 39997596
+        "input_tokens": 41825390,
+        "cached_input_tokens": 36903296,
+        "output_tokens": 164164,
+        "reasoning_output_tokens": 119680,
+        "total_tokens": 41989554
       },
       "projects": [
         {
           "window": "replyher_android-2",
           "dir": "/Users/wes/replyher_android-2",
-          "input_tokens": 20362924,
-          "cached_input_tokens": 18573568,
-          "output_tokens": 81890,
-          "reasoning_output_tokens": 59008,
-          "total_tokens": 20444814,
+          "input_tokens": 21615365,
+          "cached_input_tokens": 19452672,
+          "output_tokens": 84331,
+          "reasoning_output_tokens": 60480,
+          "total_tokens": 21699696,
           "sessions": 1,
-          "last_event": "2026-02-12T11:52:03.566Z"
+          "last_event": "2026-02-12T12:30:13.826Z"
         },
         {
           "window": "autopilot-dev",
@@ -63,13 +62,13 @@
         {
           "window": "agent-simcity",
           "dir": "/Users/wes/projects/agent-simcity",
-          "input_tokens": 5147084,
-          "cached_input_tokens": 4319104,
-          "output_tokens": 11727,
+          "input_tokens": 5883816,
+          "cached_input_tokens": 5053696,
+          "output_tokens": 12071,
           "reasoning_output_tokens": 7104,
-          "total_tokens": 5158811,
+          "total_tokens": 5895887,
           "sessions": 1,
-          "last_event": "2026-02-12T11:18:08.579Z"
+          "last_event": "2026-02-12T12:17:43.304Z"
         },
         {
           "window": "Shike",
@@ -85,18 +84,20 @@
       ],
       "top_project": {
         "window": "replyher_android-2",
-        "total_tokens": 20444814
+        "total_tokens": 21699696
       }
     },
     "lifecycle_phase_counts": {
-      "dev": 4
+      "dev": 2,
+      "review": 1,
+      "unknown": 1
     },
     "review_status_counts": {
       "in_progress": 3,
       "pending": 1
     },
     "progress": {
-      "changed": 2,
+      "changed": 4,
       "total": 4
     }
   }

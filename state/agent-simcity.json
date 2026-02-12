@@ -1,11 +1,11 @@
 {
-  "status": "absent",
-  "context_num": -1,
-  "head": "d1de7c3",
-  "commit_msg": "fix: support 100% tip fee",
-  "commit_time": 1770891807,
-  "commits_30m": 0,
+  "status": "idle",
+  "context_num": 45,
+  "head": "6cf857c",
+  "commit_msg": "chore: update status metadata",
+  "commit_time": 1770898656,
+  "commits_30m": 1,
   "working_no_commit": 0,
-  "tokens_today": 5158811,
-  "last_check": 1770898211
+  "tokens_today": 5895887,
+  "last_check": 1770899508
 }

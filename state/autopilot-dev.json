@@ -1,11 +1,11 @@
 {
-  "status": "absent",
-  "context_num": -1,
-  "head": "1d602fb",
-  "commit_msg": "fix(suggestion): add jq dependency check in codex-status.sh",
-  "commit_time": 1770897885,
-  "commits_30m": 1,
+  "status": "idle",
+  "context_num": 60,
+  "head": "d3af551",
+  "commit_msg": "fix: consume-review local-outside-function crash, move notify_review_result to t",
+  "commit_time": 1770898622,
+  "commits_30m": 3,
   "working_no_commit": 0,
   "tokens_today": 14393971,
-  "last_check": 1770898211
+  "last_check": 1770899508
 }
