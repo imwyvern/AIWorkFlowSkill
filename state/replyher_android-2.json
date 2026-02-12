@@ -1,11 +1,11 @@
 {
-  "status": "idle",
-  "context_num": 78,
+  "status": "absent",
+  "context_num": -1,
   "head": "09be0fe",
   "commit_msg": "fix: improve keyboard input experience",
   "commit_time": 1770891915,
   "commits_30m": 0,
   "working_no_commit": 0,
-  "tokens_today": 14614654,
-  "last_check": 1770895812
+  "tokens_today": 18746586,
+  "last_check": 1770897011
 }

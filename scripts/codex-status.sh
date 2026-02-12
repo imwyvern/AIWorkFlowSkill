@@ -7,6 +7,11 @@
 
 set -euo pipefail
 
+if ! command -v jq >/dev/null 2>&1; then
+    echo '{"status":"absent","detail":"jq not found"}'
+    exit 3
+fi
+
 TMUX="/opt/homebrew/bin/tmux"
 SESSION="autopilot"
 WINDOW="${1:?用法: codex-status.sh <window>}"
