@@ -4,9 +4,27 @@ logs/
 state/
 prd-progress.json
 status.json
-
-# Review artifacts (generated during runs)
-.code-review/
+state.json
+.last-review-commit
+task-queue/
 
 # OS
 .DS_Store
+
+# Legacy GUI app (deprecated)
+CodexAutopilot.app/
+ax_helper
+bin/
+lib/ax_helper
+lib/ax_helper.swift
+
+# Personal config (contains local paths)
+com.wes.codex-autopilot.plist
+
+# Review artifacts (session-specific, not project docs)
+.code-review/
+*-REVIEW.md
+*-REVIEW-*.md
+NUDGE-GUARD-ANALYSIS.md
+PASTE-BUFFER-BUG.md
+tasks/
