@@ -1,11 +1,11 @@
 {
   "status": "idle",
-  "context_num": 58,
-  "head": "b39d775",
-  "commit_msg": "docs: track sliding selection completion",
-  "commit_time": 1770899005,
-  "commits_30m": 2,
+  "context_num": 56,
+  "head": "0bd9f43",
+  "commit_msg": "fix: refine key popup display",
+  "commit_time": 1770899721,
+  "commits_30m": 3,
   "working_no_commit": 0,
-  "tokens_today": 21699696,
-  "last_check": 1770899508
+  "tokens_today": 22643108,
+  "last_check": 1770900011
 }

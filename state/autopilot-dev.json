@@ -1,11 +1,11 @@
 {
   "status": "idle",
   "context_num": 60,
-  "head": "d3af551",
-  "commit_msg": "fix: consume-review local-outside-function crash, move notify_review_result to t",
-  "commit_time": 1770898622,
-  "commits_30m": 3,
+  "head": "746df3a",
+  "commit_msg": "fix(critical): prevent watchdog nudge from overwriting manual tasks",
+  "commit_time": 1770899779,
+  "commits_30m": 4,
   "working_no_commit": 0,
   "tokens_today": 14393971,
-  "last_check": 1770899508
+  "last_check": 1770900011
 }
