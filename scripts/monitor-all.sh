@@ -305,9 +305,11 @@ for entry in "${PROJECTS[@]}"; do
     PHASE_TRACKING+=("$PHASE_SUMMARY")
     REVIEW_STATUS_TRACKING+=("$REVIEW_SUMMARY")
     # 队列任务信息
-    QUEUE_COUNT=$("${SCRIPT_DIR}/task-queue.sh" count "$SAFE_WINDOW" 2>/dev/null || echo 0)
+    local safe_window
+    safe_window=$(echo "$WINDOW" | tr -cd 'a-zA-Z0-9_-')
+    QUEUE_COUNT=$("${SCRIPT_DIR}/task-queue.sh" count "$safe_window" 2>/dev/null || echo 0)
     QUEUE_COUNT=$(normalize_int "$QUEUE_COUNT")
-    QUEUE_IN_PROGRESS=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${SAFE_WINDOW}.md" 2>/dev/null || true)
+    QUEUE_IN_PROGRESS=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${safe_window}.md" 2>/dev/null || true)
     QUEUE_IN_PROGRESS=$(normalize_int "$QUEUE_IN_PROGRESS")
     QUEUE_INFO=""
     if [ "$QUEUE_COUNT" -gt 0 ] || [ "$QUEUE_IN_PROGRESS" -gt 0 ]; then

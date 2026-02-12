@@ -121,6 +121,9 @@ case "$STATUS" in
   shell)
     echo "🔄 $WINDOW: Codex 已退出，尝试 resume..."
     # 获取锁防止与 watchdog 并发 shell recovery
+    LOCK_DIR="$HOME/.autopilot/locks"
+    mkdir -p "$LOCK_DIR"
+    SAFE_WINDOW=$(echo "$WINDOW" | tr -cd 'a-zA-Z0-9_-')
     LOCK_D="${LOCK_DIR}/${SAFE_WINDOW}.lock.d"
     if mkdir "$LOCK_D" 2>/dev/null; then
       "$TMUX" send-keys -t "${SESSION}:${WINDOW}" "cd $PROJECT_DIR && $CODEX resume --last 2>/dev/null || $CODEX --full-auto" Enter
