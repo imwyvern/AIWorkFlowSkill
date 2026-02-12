@@ -1,11 +1,11 @@
 {
   "status": "idle",
-  "context_num": 60,
-  "head": "746df3a",
-  "commit_msg": "fix(critical): prevent watchdog nudge from overwriting manual tasks",
-  "commit_time": 1770899779,
+  "context_num": 56,
+  "head": "1347c44",
+  "commit_msg": "fix(nudge): reset backoff on review CLEAN, per Codex review suggestion",
+  "commit_time": 1770900587,
   "commits_30m": 4,
   "working_no_commit": 0,
-  "tokens_today": 14393971,
-  "last_check": 1770900011
+  "tokens_today": 15198480,
+  "last_check": 1770900612
 }

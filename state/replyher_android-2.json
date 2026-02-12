@@ -1,11 +1,11 @@
 {
-  "status": "idle",
-  "context_num": 56,
-  "head": "0bd9f43",
-  "commit_msg": "fix: refine key popup display",
-  "commit_time": 1770899721,
-  "commits_30m": 3,
+  "status": "working",
+  "context_num": 54,
+  "head": "b51cc61",
+  "commit_msg": "feat: add pointer to key preview",
+  "commit_time": 1770900236,
+  "commits_30m": 4,
   "working_no_commit": 0,
-  "tokens_today": 22643108,
-  "last_check": 1770900011
+  "tokens_today": 23967928,
+  "last_check": 1770900612
 }
