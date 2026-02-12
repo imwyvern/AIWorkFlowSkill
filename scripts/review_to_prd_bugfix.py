@@ -11,6 +11,8 @@ from typing import Any
 
 import yaml
 
+SOURCE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+$")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert review P0/P1 rows into PRD bugfix items.")
@@ -82,7 +84,7 @@ def parse_review_rows(content: str) -> list[dict[str, str]]:
 
         source_id = parts[0]
         title = parts[1] if len(parts) > 1 else ""
-        if not re.match(r"^[A-Za-z]+-\d+$", source_id):
+        if not SOURCE_ID_RE.match(source_id):
             continue
         if current_priority not in {"P0", "P1"}:
             continue

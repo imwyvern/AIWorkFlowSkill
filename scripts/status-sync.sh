@@ -178,6 +178,11 @@ jq \
     | .phases.prd.bugfix_sync_count = ((.phases.prd.bugfix_sync_count // 0) + 1)
     | .phases.prd.last_sync_at = $now;
 
+  def on_unknown_event:
+    .autopilot.unknown_event_count = ((.autopilot.unknown_event_count // 0) + 1)
+    | .autopilot.last_unknown_event = $event
+    | .autopilot.last_unknown_event_at = $now;
+
   ensure_shape
   | stamp_meta
   | if $event == "commit" then on_commit
@@ -190,7 +195,7 @@ jq \
     elif $event == "compact_sent" then .autopilot.compact_count = ((.autopilot.compact_count // 0) + 1)
     elif $event == "nudge_sent" then .autopilot.nudge_count = ((.autopilot.nudge_count // 0) + 1)
     elif $event == "shell_recovery" then .autopilot.recoveries = ((.autopilot.recoveries // 0) + 1)
-    else .
+    else on_unknown_event
     end
   ' "$STATUS_FILE" > "${STATUS_FILE}.tmp.$$"
 

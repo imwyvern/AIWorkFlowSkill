@@ -103,6 +103,26 @@ wait_for_non_empty_file() {
     return 1
 }
 
+is_layer2_output_clean() {
+    local content="${1:-}"
+    printf '%s\n' "$content" | awk '
+        {
+            line = $0
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            if (line != "") {
+                count += 1
+                value = toupper(line)
+            }
+        }
+        END {
+            if (count == 1 && value == "CLEAN") {
+                exit 0
+            }
+            exit 1
+        }
+    '
+}
+
 sync_project_status() {
     local project_dir="$1" event="$2"
     shift 2 || true
@@ -269,7 +289,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         layer2_raw=$(cat "$review_output_file" 2>/dev/null || echo "")
         layer2_raw_flat=$(echo "$layer2_raw" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
         sync_review_bugfix_items "$project_dir" "$review_output_file" "$window"
-        if ! echo "$layer2_raw_flat" | grep -qiE '(^|[^[:alnum:]_])CLEAN([^[:alnum:]_]|$)'; then
+        if ! is_layer2_output_clean "$layer2_raw"; then
             layer2_issues="layer2: ${layer2_raw_flat:0:400}. "
         fi
         layer2_completed=true

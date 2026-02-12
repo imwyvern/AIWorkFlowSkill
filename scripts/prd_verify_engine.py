@@ -23,6 +23,9 @@ from typing import Any
 
 import yaml
 
+ITEM_ID_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+")
+TODO_ITEM_RE = re.compile(rf"^-\s*(✅\s*)?({ITEM_ID_RE.pattern})\b")
+
 
 def load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -323,7 +326,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--changed-files",
         default="",
-        help="comma-separated changed files to filter related items",
+        help="changed files filter, accepts JSON array or comma-separated list",
     )
     parser.add_argument(
         "--strict",
@@ -348,6 +351,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_changed_files_arg(raw: str) -> list[str]:
+    payload = raw.strip()
+    if not payload:
+        return []
+
+    if payload.startswith("["):
+        try:
+            decoded = json.loads(payload)
+        except json.JSONDecodeError:
+            decoded = None
+        if isinstance(decoded, list):
+            return [str(item).strip() for item in decoded if str(item).strip()]
+
+    if "\n" in payload:
+        return [line.strip() for line in payload.splitlines() if line.strip()]
+
+    return [item.strip() for item in payload.split(",") if item.strip()]
+
+
 def sync_todo_file(project_dir: Path, todo_file: str, report: dict[str, Any]) -> None:
     todo_path = (project_dir / todo_file).resolve()
     if not todo_path.exists():
@@ -367,11 +389,10 @@ def sync_todo_file(project_dir: Path, todo_file: str, report: dict[str, Any]) ->
 
     lines = todo_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     updated_lines: list[str] = []
-    item_pattern = re.compile(r"^-\s*(✅\s*)?([A-Za-z]+-\d+)\b")
     changed = False
 
     for line in lines:
-        m = item_pattern.match(line)
+        m = TODO_ITEM_RE.match(line)
         if not m:
             updated_lines.append(line)
             continue
@@ -415,7 +436,7 @@ def main() -> int:
     strict_mode = bool(args.strict or meta.get("strict_mode_default", False))
 
     only_ids = {i.strip() for i in args.only_ids.split(",") if i.strip()}
-    changed_files = [x.strip() for x in args.changed_files.split(",") if x.strip()]
+    changed_files = parse_changed_files_arg(args.changed_files)
 
     all_entries = as_list(resolved.get("items")) + as_list(resolved.get("bugfixes"))
     selected = [
@@ -432,7 +453,7 @@ def main() -> int:
 
     report = {
         "meta": {
-            "generated_at": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "project_dir": str(project_dir),
             "items_file": str(items_path),
             "version": version,
