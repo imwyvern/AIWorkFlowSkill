@@ -313,20 +313,40 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         continue
     fi
 
+    # Telegram 通知函数
+    notify_review_result() {
+        local tg_token tg_chat config_file msg
+        config_file="$HOME/.autopilot/config.yaml"
+        tg_token=$(grep '^bot_token' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
+        tg_chat=$(grep '^chat_id' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
+        msg="$1"
+        if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
+                -d chat_id="$tg_chat" -d text="$msg" >/dev/null 2>&1 &
+        fi
+    }
+
     if [ -n "$combined_issues" ]; then
         log "⚠️ ${safe}: review found issues: ${combined_issues}"
         # 有问题时写 issues 文件供 watchdog nudge 修复，不重置计数
         echo "$combined_issues" > "${STATE_DIR}/autocheck-issues-${safe}.tmp" && mv -f "${STATE_DIR}/autocheck-issues-${safe}.tmp" "${STATE_DIR}/autocheck-issues-${safe}"
         log "⚠️ ${safe}: issues written for watchdog nudge, counters NOT reset"
-        # 仍然更新 review 时间戳（防止 2 小时兜底反复触发同一批问题）
-        now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
-        sync_project_status "$project_dir" "review_issues" "window=${window}" "issues=${combined_issues}" "state=idle"
-    else
-        log "✅ ${safe}: review clean"
-        # Phase 2: review 成功且无问题 → 重置计数和时间戳
+        # 重置 commit 计数为 0（fix 后的新 commit 重新累积，达到阈值后自动 re-review）
         echo 0 > "${COMMIT_COUNT_DIR}/${safe}-since-review"
         now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
+        sync_project_status "$project_dir" "review_issues" "window=${window}" "issues=${combined_issues}" "state=idle"
+        # Telegram 通知 review 结果
+        local issue_preview="${combined_issues:0:200}"
+        notify_review_result "🔍 ${window} Review 发现问题，已触发修复循环：${issue_preview}"
+    else
+        log "✅ ${safe}: review clean"
+        # review CLEAN = 本轮迭代完成
+        echo 0 > "${COMMIT_COUNT_DIR}/${safe}-since-review"
+        now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
+        rm -f "${STATE_DIR}/autocheck-issues-${safe}"
         sync_project_status "$project_dir" "review_clean" "window=${window}" "state=idle"
+        # Telegram 通知 CLEAN
+        notify_review_result "✅ ${window} Review CLEAN 🟢 本轮迭代完成，代码质量达标！"
     fi
 
     # 记录 review commit 点

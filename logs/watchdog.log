@@ -2778,3 +2778,9 @@
 [2026-02-12 03:21:25] 📝 autopilot-dev: new commit (+1, total since review: 34) — fix(core): PRD-complete no longer stops nudge cycle; review/bugfix iteration support
 [2026-02-12 03:21:25] ✅ autopilot-dev: PRD verify passed for cf09671
 [2026-02-12 03:22:27] 📝 Shike: new commit (+1, total since review: 50) — chore(api): enforce prisma sqlite/postgres schema parity
+[2026-02-12 03:24:52] 📝 autopilot-dev: new commit (+1, total since review: 35) — feat(iteration): detect prd-todo.md changes and re-activate nudge cycle
+[2026-02-12 03:24:53] ✅ autopilot-dev: PRD verify passed for fea2e82
+[2026-02-12 03:25:34] 📊 Shike: state=idle
+[2026-02-12 03:25:34] 📊 agent-simcity: state=idle
+[2026-02-12 03:25:34] 📊 replyher_android-2: state=idle
+[2026-02-12 03:25:34] 📊 autopilot-dev: state=idle
