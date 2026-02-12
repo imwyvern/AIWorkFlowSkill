@@ -216,6 +216,27 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     last_review=$(cat "${project_dir}/.last-review-commit" 2>/dev/null || git -C "$project_dir" log -50 --format="%H" 2>/dev/null | tail -1)
     review_output_file="${STATE_DIR}/layer2-review-${safe}.txt"
 
+    # 检查是否已有 in-progress review（防重复发送）
+    local in_progress_file="${STATE_DIR}/review-in-progress-${safe}"
+    if [ -f "$in_progress_file" ]; then
+        local ip_age=$(( $(now_ts) - $(stat -f %m "$in_progress_file" 2>/dev/null || echo 0) ))
+        if [ "$ip_age" -lt 600 ]; then
+            # 10 分钟内已发送 review，等待结果
+            if [ -s "$review_output_file" ]; then
+                # 输出文件已有内容，标记完成
+                rm -f "$in_progress_file"
+                log "✅ ${safe}: review output received after ${ip_age}s"
+            else
+                log "⏭ ${safe}: review in-progress (${ip_age}s), waiting for output"
+                continue
+            fi
+        else
+            # 超过 10 分钟无结果，清理标记重试
+            rm -f "$in_progress_file"
+            log "⚠️ ${safe}: review in-progress stale (${ip_age}s), retrying"
+        fi
+    fi
+
     # M-5: 非 idle 不消费 trigger，留待下轮
     if ! $stale_trigger && ! is_codex_idle "$window"; then
         log "⏭ ${safe}: Codex not idle, keep trigger for next round"
@@ -282,17 +303,19 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
 
         rm -f "$review_output_file"
         if "${SCRIPT_DIR}/tmux-send.sh" "$window" "$review_msg" >/dev/null 2>&1; then
+            touch "$in_progress_file"
             log "📤 ${safe}: Layer 2 incremental review instruction sent to Codex"
         else
             log "⏭ ${safe}: failed to send Layer 2 instruction, keep trigger"
             continue
         fi
 
-        # M-1: 必须等 Layer2 输出文件存在且非空，才允许判定 clean/reset
-        if ! wait_for_non_empty_file "$review_output_file" "$REVIEW_OUTPUT_WAIT_SECONDS"; then
-            log "⏭ ${safe}: Layer 2 output missing/empty after ${REVIEW_OUTPUT_WAIT_SECONDS}s, keep trigger"
+        # 不再阻塞等待 — 由 in-progress 机制在下轮检查输出
+        if [ ! -s "$review_output_file" ]; then
+            log "⏭ ${safe}: review sent, waiting for output (in-progress)"
             continue
         fi
+        rm -f "$in_progress_file"
 
         layer2_raw=$(cat "$review_output_file" 2>/dev/null || echo "")
         layer2_raw_flat=$(echo "$layer2_raw" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')

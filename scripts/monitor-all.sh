@@ -168,7 +168,7 @@ for entry in "${PROJECTS[@]}"; do
     STATE_FILE="$STATE_DIR/${WINDOW}.json"
 
     # --- 当前状态 ---
-    STATUS_JSON=$("$SCRIPT_DIR/codex-status.sh" "$WINDOW" 2>&1) || true
+    STATUS_JSON=$("$SCRIPT_DIR/codex-status.sh" "$WINDOW" 2>/dev/null) || true
     CUR_STATUS=$(echo "$STATUS_JSON" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || true)
     CUR_CONTEXT=$(echo "$STATUS_JSON" | grep -o '"context_num":[0-9-]*' | head -1 | cut -d: -f2 || true)
     [ -z "$CUR_STATUS" ] && CUR_STATUS="absent"

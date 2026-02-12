@@ -209,13 +209,13 @@ send_tmux_message() {
 
 extract_status_field() {
     local status_json="$1" field="$2" value
-    value=$(echo "$status_json" | grep -o "\"${field}\":\"[^\"]*\"" | head -1 | cut -d'"' -f4 || true)
-    [ -n "$value" ] && echo "$value" || echo ""
+    value=$(echo "$status_json" | jq -r ".${field} // \"\"" 2>/dev/null || true)
+    echo "$value"
 }
 
 extract_context_num_field() {
     local status_json="$1" ctx
-    ctx=$(echo "$status_json" | grep -o '"context_num":[0-9-]*' | head -1 | cut -d: -f2 || true)
+    ctx=$(echo "$status_json" | jq -r '.context_num // -1' 2>/dev/null || echo "-1")
     if [[ "$ctx" =~ ^-?[0-9]+$ ]]; then
         echo "$ctx"
     else
@@ -326,7 +326,19 @@ run_with_timeout() {
     if [ -n "$TIMEOUT_CMD" ]; then
         "$TIMEOUT_CMD" "$secs" "$@"
     else
-        "$@"
+        # Fallback: bash background + kill after timeout
+        "$@" &
+        local pid=$!
+        (
+            sleep "$secs"
+            kill "$pid" 2>/dev/null
+        ) &
+        local watcher=$!
+        wait "$pid" 2>/dev/null
+        local rc=$?
+        kill "$watcher" 2>/dev/null || true
+        wait "$watcher" 2>/dev/null || true
+        return "$rc"
     fi
 }
 
@@ -1053,7 +1065,20 @@ pid_start_signature "$$" > "${WATCHDOG_LOCK}/start_sig" 2>/dev/null || true
 now_ts > "${WATCHDOG_LOCK}/started_at"
 # ERR trap 仅用于诊断；不要与 set -e 组合
 trap 'log "💥 ERR at line $LINENO (code=$?)"' ERR
-trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$WATCHDOG_LOCK"' EXIT
+# Graceful shutdown: kill background jobs, clean lock
+cleanup_watchdog() {
+    local pids
+    pids=$(jobs -p 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        kill $pids 2>/dev/null || true
+        # Give children 2s to clean up their own locks
+        sleep 2
+        kill -9 $pids 2>/dev/null || true
+    fi
+    rm -rf "$WATCHDOG_LOCK"
+}
+trap cleanup_watchdog EXIT
+trap 'log "🛑 Received SIGTERM, shutting down..."; exit 0' TERM INT
 
 assert_runtime_ready
 load_projects

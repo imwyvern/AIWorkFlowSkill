@@ -2,25 +2,25 @@
   "lastStatus": "ok",
   "error": "",
   "wakeMode": "now",
-  "generated_at": "2026-02-12T11:20:10Z",
+  "generated_at": "2026-02-12T11:30:12Z",
   "summary": [
-    "📊 monitor 2026-02-12 03:20 | progress 1/4 | working 0 idle 4 permission 0 shell 0 absent 0",
+    "📊 monitor 2026-02-12 03:30 | progress 2/4 | working 0 idle 4 permission 0 shell 0 absent 0",
     "🧠 daily tokens 2026-02-12: total 32.97M | input 32.85M | cached 28.77M | output 119.8k | reasoning 87.8k | top replyher_android-2 14.61M",
-    "⚠️ Shike: idle | phase dev | review in_progress | c30m 1 | tok/day 0 | fix(api): resolve layer2 P1/P2 parity, quota and session cache issues",
+    "⚠️ Shike: idle | phase dev | review in_progress | c30m 2 | tok/day 0 | chore(api): enforce prisma sqlite/postgres schema parity",
     "  🔨dev → 🔍review(2P0 5P1) → ⏳test → ⏳deploy",
     "⚠️ agent-simcity: idle | phase dev | review pending | c30m 0 | tok/day 5.16M | fix: support 100% tip fee",
     "  🔨dev → ⏳review → 🔧test(1bugs) → ⏳deploy",
     "⚠️ replyher_android-2: idle | phase dev | review in_progress | c30m 0 | tok/day 14.61M | fix: improve keyboard input experience",
     "  🔨dev → 🔍review(2P0 9P1) → 🔧test(2bugs) → ⏳deploy",
-    "⚠️ autopilot-dev: idle | phase dev | review in_progress | c30m 2 | tok/day 13.19M | fix(review-r2): handle_idle accept idle_low_context, remove set -e from monitor-",
+    "⚠️ autopilot-dev: idle | phase dev | review in_progress | c30m 5 | tok/day 13.19M | feat(iteration): review-until-clean loop with fast re-review and Telegram notifi",
     "  🔨dev → 🔍review(0P0 0P1) → ⏳test → ⏳deploy"
   ],
   "report": {
-    "generated_at": "2026-02-12T11:20:10Z",
-    "generated_at_local": "2026-02-12 03:20",
+    "generated_at": "2026-02-12T11:30:12Z",
+    "generated_at_local": "2026-02-12 03:30",
     "counts": {
       "total_projects": 4,
-      "changed_projects": 1,
+      "changed_projects": 2,
       "working": 0,
       "idle": 4,
       "permission": 0,
@@ -96,7 +96,7 @@
       "pending": 1
     },
     "progress": {
-      "changed": 1,
+      "changed": 2,
       "total": 4
     }
   }
