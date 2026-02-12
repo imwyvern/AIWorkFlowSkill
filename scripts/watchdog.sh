@@ -224,8 +224,15 @@ extract_context_num_field() {
 }
 
 get_window_status_json() {
-    local window="$1"
-    "$SCRIPT_DIR/codex-status.sh" "$window" 2>/dev/null || echo '{"status":"absent","context_num":-1}'
+    local window="$1" result
+    # codex-status.sh exit codes: 0=working, 1=idle/permission, 2=shell, 3=absent
+    # All are valid outputs; only capture stderr failures
+    result=$("$SCRIPT_DIR/codex-status.sh" "$window" 2>/dev/null) || true
+    if [ -z "$result" ] || ! echo "$result" | jq -e .status >/dev/null 2>&1; then
+        echo '{"status":"absent","context_num":-1}'
+    else
+        echo "$result"
+    fi
 }
 
 extract_json_number() {

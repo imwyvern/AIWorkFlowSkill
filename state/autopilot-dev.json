@@ -1,11 +1,11 @@
 {
   "status": "absent",
   "context_num": -1,
-  "head": "99e78ea",
-  "commit_msg": "fix(p0+p1): batch fix all remaining P0/P1 from triple review",
-  "commit_time": 1770896115,
-  "commits_30m": 4,
+  "head": "1d602fb",
+  "commit_msg": "fix(suggestion): add jq dependency check in codex-status.sh",
+  "commit_time": 1770897885,
+  "commits_30m": 1,
   "working_no_commit": 0,
   "tokens_today": 14393971,
-  "last_check": 1770897011
+  "last_check": 1770898211
 }
