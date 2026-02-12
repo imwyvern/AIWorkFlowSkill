@@ -181,6 +181,27 @@ get_window_status_json() {
     "$SCRIPT_DIR/codex-status.sh" "$window" 2>/dev/null || echo '{"status":"absent","context_num":-1}'
 }
 
+extract_json_number() {
+    local status_json="$1" field="$2" value
+    value=$(echo "$status_json" | jq -r ".${field} // -1" 2>/dev/null || echo "-1")
+    if ! [[ "$value" =~ ^-?[0-9]+$ ]]; then
+        value=-1
+    fi
+    echo "$value"
+}
+
+send_telegram_alert() {
+    local window="$1" text="$2"
+    local tg_token tg_chat config_file
+    config_file="$HOME/.autopilot/config.yaml"
+    tg_token=$(grep '^bot_token' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
+    tg_chat=$(grep '^chat_id' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
+    if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
+        curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
+            -d chat_id="$tg_chat" -d text="🚨 ${window}: ${text}" >/dev/null 2>&1 &
+    fi
+}
+
 start_nudge_ack_check() {
     local window="$1" safe="$2" project_dir="$3" before_head="$4" before_ctx="$5" reason="$6"
     local ack_lock="${LOCK_DIR}/ack-${safe}.lock.d"
@@ -485,6 +506,26 @@ handle_idle() {
         before_head=$(run_with_timeout 10 git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "none")
         before_status_json=$(get_window_status_json "$window")
         before_ctx=$(extract_context_num_field "$before_status_json")
+
+        local manual_block_reason
+        manual_block_reason=$(echo "$before_status_json" | jq -r '.manual_block_reason // ""' 2>/dev/null || echo "")
+        if [ -n "$manual_block_reason" ]; then
+            log "🛑 ${window}: manual block detected (${manual_block_reason}) — pausing nudges"
+            send_telegram_alert "$window" "manual block detected (${manual_block_reason})"
+            sync_project_status "$project_dir" "nudge_blocked_manual" "window=${window}" "state=idle" "issue=${manual_block_reason}"
+            release_lock "$safe"
+            return
+        fi
+
+        local weekly_limit_pct
+        weekly_limit_pct=$(extract_json_number "$before_status_json" "weekly_limit_pct")
+        if [ "$weekly_limit_pct" -ge 0 ] && [ "$weekly_limit_pct" -lt 10 ]; then
+            log "⚠️ ${window}: weekly limit low (${weekly_limit_pct}%) — deferring nudge"
+            send_telegram_alert "$window" "weekly limit low (${weekly_limit_pct}%) — hold off on idle nudges"
+            sync_project_status "$project_dir" "nudge_skipped" "window=${window}" "state=idle" "reason=limit_low"
+            release_lock "$safe"
+            return
+        fi
 
         # 优先级 1: post-compact 恢复协议
         local compact_flag="${STATE_DIR}/post-compact-${safe}"
