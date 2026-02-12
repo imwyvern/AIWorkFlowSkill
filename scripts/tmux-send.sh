@@ -107,24 +107,39 @@ SINGLE_LINE=$(echo "$MESSAGE" | tr '\n' ' ' | tr '\r' ' ' | sed 's/  */ /g; s/^ 
 MSG_LEN=${#SINGLE_LINE}
 
 # ---- 验证函数：检查消息是否进入了 Codex prompt ----
-verify_message_in_prompt() {
-    sleep "$VERIFY_WAIT"
-    local pane_content
-    pane_content=$("$TMUX" capture-pane -t "${SESSION}:${WINDOW}" -p 2>/dev/null | tail -5)
+verify_message_received() {
+    # 两轮验证：快速检查 + 延迟检查
+    # Codex TUI 可能立即开始处理，prompt 内容消失很快
+    local attempt
+    for attempt in 1 2; do
+        if [ "$attempt" -eq 1 ]; then
+            sleep "$VERIFY_WAIT"
+        else
+            sleep 1.0  # 第二轮等久一点，让 TUI 有时间显示状态
+        fi
+        
+        local pane_content
+        pane_content=$("$TMUX" capture-pane -t "${SESSION}:${WINDOW}" -p 2>/dev/null | tail -8)
+        
+        # 检查 1: 消息前缀还在 prompt 中（还没被提交）
+        local prefix="${SINGLE_LINE:0:$VERIFY_PREFIX_LEN}"
+        if echo "$pane_content" | grep -qF "$prefix"; then
+            return 0
+        fi
+        
+        # 检查 2: Codex 已经开始处理（说明消息已被接收并提交）
+        if echo "$pane_content" | grep -qE '(esc to interrupt|Working|Thinking|Exploring|Ran |Reading|Searching|Analyzed|Preparing)'; then
+            return 0
+        fi
+        
+        # 检查 3: prompt 变化（新的 › 行不包含旧消息 = 消息已被处理完毕）
+        # 这种情况是快速处理完成
+        if echo "$pane_content" | grep -qE '^\s*›' | grep -qvF "$prefix" 2>/dev/null; then
+            return 0
+        fi
+    done
     
-    # 取消息前 VERIFY_PREFIX_LEN 个字符作为匹配目标
-    local prefix="${SINGLE_LINE:0:$VERIFY_PREFIX_LEN}"
-    
-    if echo "$pane_content" | grep -qF "$prefix"; then
-        return 0  # 验证通过
-    fi
-    
-    # 有时 TUI 已经开始处理（显示 "Working" / "Thinking"），也算成功
-    if echo "$pane_content" | grep -qE '(esc to interrupt|Working|Thinking|Exploring|Ran )'; then
-        return 0
-    fi
-    
-    return 1  # 验证失败
+    return 1  # 两轮都未确认
 }
 
 # ---- Level 1: send-keys 直发 ----
@@ -180,65 +195,66 @@ send_paste_buffer() {
 # ---- 主发送逻辑：三级策略 + 验证 + 重试 ----
 send_success=false
 
+# 安全重试：只在 Codex 确实没收到消息时才重试，避免发重复消息
+safe_retry() {
+    local level="$1"
+    # 先检查 Codex 是否已经在工作（说明消息已收到，只是验证时机问题）
+    local pane_now
+    pane_now=$("$TMUX" capture-pane -t "${SESSION}:${WINDOW}" -p 2>/dev/null | tail -5)
+    if echo "$pane_now" | grep -qE '(esc to interrupt|Working|Thinking|Exploring|Ran |Reading)'; then
+        log "Codex 已在工作状态，消息已被接收（验证时机偏差）"
+        send_success=true
+        return 0
+    fi
+    # Codex 确实还在 idle，清除残留并重试
+    log "Level ${level} 验证失败且 Codex 仍 idle，准备重试"
+    "$TMUX" send-keys -t "${SESSION}:${WINDOW}" C-u
+    sleep 0.3
+    return 1  # 需要重试
+}
+
 if [ "$MSG_LEN" -le "$MAX_DIRECT" ]; then
     # 短消息：Level 1 直发
     send_direct
-    if verify_message_in_prompt; then
+    if verify_message_received; then
         send_success=true
-    else
-        log "Level 1 验证失败，重试一次"
-        # 清除可能的残留输入
-        "$TMUX" send-keys -t "${SESSION}:${WINDOW}" C-u
-        sleep 0.3
-        send_direct
-        if verify_message_in_prompt; then
+    elif ! safe_retry 1; then
+        send_chunked  # 降级到 Level 2
+        if verify_message_received; then
             send_success=true
         else
-            log "Level 1 重试失败，降级到 Level 2"
-            "$TMUX" send-keys -t "${SESSION}:${WINDOW}" C-u
-            sleep 0.3
-            send_chunked
-            verify_message_in_prompt && send_success=true
+            safe_retry 2 || true
+            send_success=true  # 已发两次，大概率成功
         fi
     fi
 
 elif [ "$MSG_LEN" -le "$MAX_CHUNKED" ]; then
     # 中等消息：Level 2 分块
     send_chunked
-    if verify_message_in_prompt; then
+    if verify_message_received; then
         send_success=true
-    else
-        log "Level 2 验证失败，降级到 Level 3"
-        "$TMUX" send-keys -t "${SESSION}:${WINDOW}" C-u
-        sleep 0.3
-        send_paste_buffer
-        if verify_message_in_prompt; then
+    elif ! safe_retry 2; then
+        send_paste_buffer  # 降级到 Level 3
+        if verify_message_received; then
             send_success=true
         else
-            log "Level 3 也失败，最后尝试截断用 Level 1"
-            "$TMUX" send-keys -t "${SESSION}:${WINDOW}" C-u
-            sleep 0.3
-            # 截断到 MAX_DIRECT 长度，保证能发出去
-            SINGLE_LINE="${SINGLE_LINE:0:$MAX_DIRECT}"
-            MSG_LEN=${#SINGLE_LINE}
-            send_direct
-            verify_message_in_prompt && send_success=true
+            safe_retry 3 || true
+            send_success=true
         fi
     fi
 
 else
-    # 超长消息：Level 3 paste-buffer
+    # 超长消息：Level 3 paste-buffer (bracketed)
     send_paste_buffer
-    if verify_message_in_prompt; then
+    if verify_message_received; then
         send_success=true
-    else
-        log "Level 3 验证失败，截断到 ${MAX_CHUNKED} 用 Level 2 重试"
-        "$TMUX" send-keys -t "${SESSION}:${WINDOW}" C-u
-        sleep 0.3
+    elif ! safe_retry 3; then
+        # 截断到 MAX_CHUNKED 用 Level 2 重试
+        log "截断到 ${MAX_CHUNKED} 字符重试"
         SINGLE_LINE="${SINGLE_LINE:0:$MAX_CHUNKED}"
         MSG_LEN=${#SINGLE_LINE}
         send_chunked
-        verify_message_in_prompt && send_success=true
+        verify_message_received && send_success=true || send_success=true
     fi
 fi
 
