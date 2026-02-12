@@ -1,12 +1,12 @@
 # AIWorkFlow — AI 开发全流程自动化系统
 
-> 一套面向 AI 创业团队的完整开发工具链：**6 个开发流程 Skill** + **Codex Autopilot 多项目自动化引擎**
+> 一套面向 AI 创业团队的完整开发工具链：**6 个开发流程 Skill** + **Codex Autopilot 多项目自动化引擎** + **OpenClaw 智能调度层**
 
 ---
 
 ## 🏗 系统组成
 
-本项目包含两大模块：
+本项目包含三大模块：
 
 ### 1. 开发流程 Skill 体系 (v1.5.0)
 
@@ -15,6 +15,10 @@
 ### 2. Codex Autopilot 引擎
 
 多项目并行的 Codex CLI 自动化监控与任务编排系统，通过 tmux + launchd 实现 7×24 无人值守开发。
+
+### 3. OpenClaw 智能调度层
+
+通过 [OpenClaw](https://github.com/openclaw/openclaw) 提供上层智能调度能力，包括 cron 定时任务、Claude sub-agent 代码审查、Telegram 消息通道、以及跨 AI 引擎的协同编排。
 
 ---
 
@@ -82,6 +86,50 @@ ln -sf /path/to/AIWorkFlowSkill/development ~/.gemini/skills/development
             │monitor-all.sh│    │  Telegram     │    │consume-review│
             │ + token统计   │───→│  通知/报告    │    │-trigger.sh   │
             └──────────────┘    └──────────────┘    └──────────────┘
+```
+
+### OpenClaw 调度层
+
+Autopilot 引擎与 [OpenClaw](https://github.com/openclaw/openclaw) 深度集成，形成三层协同：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    OpenClaw Gateway                      │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌────────┐ │
+│  │  Cron    │  │  Claude   │  │ Telegram  │  │ Task   │ │
+│  │  定时任务 │  │ Sub-agent │  │  通知通道  │  │ Queue  │ │
+│  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └───┬────┘ │
+└───────┼──────────────┼──────────────┼────────────┼──────┘
+        │              │              │            │
+        ▼              ▼              ▼            ▼
+   monitor-all.sh  Code Review   告警/报告    用户提交任务
+   (10min 报告)    (双路审查)    (状态推送)   (Codex 空闲时派发)
+```
+
+**OpenClaw 提供的关键能力：**
+
+| 能力 | 说明 |
+|------|------|
+| **Cron 定时任务** | 10 分钟监控报告、每日工作总结、PRD 自动验收、竞品监控 |
+| **Claude Sub-agent** | 独立 Claude 实例执行代码审查，与 Codex 形成**双路交叉审查** |
+| **Telegram 通道** | 实时状态推送、告警通知、任务接收（用户发 Telegram → Claude 写入队列 → Codex 执行） |
+| **跨引擎协同** | Claude（审查/分析）+ Codex（编码/修复）各司其职，通过触发文件协调 |
+| **对话式管理** | 通过 Telegram 与 Claude 对话，即时查询项目状态、派发任务、触发审查 |
+
+**典型协同流程：**
+
+```
+用户 (Telegram) → "ReplyHer 有个白屏 bug"
+       ↓
+Claude (OpenClaw) → 写入 task-queue → 等待 Codex idle
+       ↓
+Watchdog 检测 idle → 从队列取出任务 → tmux send-keys 发给 Codex
+       ↓
+Codex 修复 → commit → watchdog 检测 commit 数达标
+       ↓
+触发 Claude sub-agent 代码审查 → 发现问题 → 再派给 Codex 修
+       ↓
+Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
 ```
 
 ### 核心脚本
