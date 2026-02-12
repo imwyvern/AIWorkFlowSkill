@@ -2844,3 +2844,14 @@
 [2026-02-12 04:12:13] 📊 agent-simcity: state=absent
 [2026-02-12 04:12:13] 📊 replyher_android-2: state=absent
 [2026-02-12 04:12:13] 📊 autopilot-dev: state=absent
+[2026-02-12 04:12:54] 📝 autopilot-dev: new commit (+1, total since review: 39) — fix(critical): watchdog get_window_status_json treated exit 1 as absent
+[2026-02-12 04:12:54] ✅ autopilot-dev: PRD verify passed for eb4affb
+[2026-02-12 04:13:53] 🚀 Watchdog v4 started (tick=10s, idle_threshold=300s, idle_confirm=3, inertia=90s, projects=4, pid=6811)
+[2026-02-12 04:15:45] ℹ️ Shike: PRD complete, no pending issues, low-freq nudge
+[2026-02-12 04:16:05] 🛠 Shike: dirty tree detected before idle nudge; nudging to commit
+[2026-02-12 04:16:06] 📤 Shike: auto-nudged #2 (idle 2855s) — 当前仓库存在未提交改动（ M apps/api/src/modules/admin/admin.controll
+[2026-02-12 04:16:16] 🛑 Received SIGTERM, shutting down...
+[2026-02-12 04:16:18] 🚀 Watchdog v4 started (tick=10s, idle_threshold=300s, idle_confirm=3, inertia=90s, projects=4, pid=8254)
+[2026-02-12 04:16:38] ℹ️ agent-simcity: PRD complete, no pending issues, low-freq nudge
+[2026-02-12 04:16:59] 🛠 agent-simcity: dirty tree detected before idle nudge; nudging to commit
+[2026-02-12 04:16:59] 📤 agent-simcity: auto-nudged #3 (idle 3512s) — 当前仓库存在未提交改动（ M status.json），请先提交/暂存再�

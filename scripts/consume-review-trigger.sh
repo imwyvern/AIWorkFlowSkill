@@ -66,6 +66,18 @@ now_ts() {
     date +%s
 }
 
+notify_review_result() {
+    local tg_token tg_chat config_file msg
+    config_file="$HOME/.autopilot/config.yaml"
+    tg_token=$(grep '^bot_token' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
+    tg_chat=$(grep '^chat_id' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
+    msg="$1"
+    if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
+        curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
+            -d chat_id="$tg_chat" -d text="$msg" >/dev/null 2>&1 &
+    fi
+}
+
 TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
     TIMEOUT_CMD="timeout"
@@ -217,9 +229,9 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     review_output_file="${STATE_DIR}/layer2-review-${safe}.txt"
 
     # 检查是否已有 in-progress review（防重复发送）
-    local in_progress_file="${STATE_DIR}/review-in-progress-${safe}"
+    in_progress_file="${STATE_DIR}/review-in-progress-${safe}"
     if [ -f "$in_progress_file" ]; then
-        local ip_age=$(( $(now_ts) - $(stat -f %m "$in_progress_file" 2>/dev/null || echo 0) ))
+        ip_age=$(( $(now_ts) - $(stat -f %m "$in_progress_file" 2>/dev/null || echo 0) ))
         if [ "$ip_age" -lt 600 ]; then
             # 10 分钟内已发送 review，等待结果
             if [ -s "$review_output_file" ]; then
@@ -337,19 +349,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     fi
 
     # Telegram 通知函数
-    notify_review_result() {
-        local tg_token tg_chat config_file msg
-        config_file="$HOME/.autopilot/config.yaml"
-        tg_token=$(grep '^bot_token' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
-        tg_chat=$(grep '^chat_id' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
-        msg="$1"
-        if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
-            curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
-                -d chat_id="$tg_chat" -d text="$msg" >/dev/null 2>&1 &
-        fi
-    }
-
-    if [ -n "$combined_issues" ]; then
+        if [ -n "$combined_issues" ]; then
         log "⚠️ ${safe}: review found issues: ${combined_issues}"
         # 有问题时写 issues 文件供 watchdog nudge 修复，不重置计数
         echo "$combined_issues" > "${STATE_DIR}/autocheck-issues-${safe}.tmp" && mv -f "${STATE_DIR}/autocheck-issues-${safe}.tmp" "${STATE_DIR}/autocheck-issues-${safe}"
@@ -359,7 +359,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
         sync_project_status "$project_dir" "review_issues" "window=${window}" "issues=${combined_issues}" "state=idle"
         # Telegram 通知 review 结果
-        local issue_preview="${combined_issues:0:200}"
+        issue_preview="${combined_issues:0:200}"
         notify_review_result "🔍 ${window} Review 发现问题，已触发修复循环：${issue_preview}"
     else
         log "✅ ${safe}: review clean"
