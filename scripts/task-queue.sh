@@ -1,14 +1,19 @@
 #!/bin/bash
-# task-queue.sh — 任务队列管理
+# task-queue.sh — 紧急/临时任务队列管理
+#
+# 定位: 短期、具体、可一次 commit 解决的任务（bug、小迭代）
+#       与 prd-todo.md（长期功能规划）互补，不替代
+#       queue 优先级高于 prd-todo（watchdog handle_idle 优先级 2 vs 4）
+#
 # 用法:
-#   task-queue.sh add <project> <task> [priority]   # 添加任务 (priority: high/normal, default: normal)
+#   task-queue.sh add <project> <task> [priority]   # 添加任务 (priority: high/normal)
 #   task-queue.sh list <project>                     # 列出队列
-#   task-queue.sh next <project>                     # 获取下一个待办任务（不移除）
+#   task-queue.sh next <project>                     # 获取下一个待办任务
 #   task-queue.sh start <project>                    # 标记第一个待办为进行中
-#   task-queue.sh done <project> [commit_hash]       # 标记进行中任务为完成
-#   task-queue.sh fail <project> [reason]            # 标记进行中任务为失败（重新入队）
-#   task-queue.sh count <project>                    # 返回待办任务数
-#   task-queue.sh summary                            # 所有项目队列概要
+#   task-queue.sh done <project> [commit_hash]       # 完成 + 自动同步 prd-todo
+#   task-queue.sh fail <project> [reason]            # 失败（自动重新入队）
+#   task-queue.sh count <project>                    # 待办数
+#   task-queue.sh summary                            # 全局概要
 
 set -euo pipefail
 
@@ -52,23 +57,21 @@ cmd_add() {
     local entry="- [ ] ${task} | added: $(now_iso)"
 
     if [ "$priority" = "high" ]; then
-        # 高优先级: 插入到第一个 [ ] 之前（但在 header 之后）
-        local header_end
-        header_end=$(grep -n '^#' "$file" | tail -1 | cut -d: -f1)
-        header_end=${header_end:-0}
-
-        # 找第一个 [ ] 行
-        local first_todo
-        first_todo=$(grep -n '^\- \[ \]' "$file" | head -1 | cut -d: -f1)
-
-        if [ -n "$first_todo" ]; then
-            # 插入到第一个待办之前
-            sed -i '' "${first_todo}i\\
-${entry}
-" "$file"
-        else
-            echo "$entry" >> "$file"
-        fi
+        # 高优先级: 插入到第一个 [ ] 之前（python 处理，避免 sed UTF-8 问题）
+        python3 << PYEOF
+f = "$file"
+entry = "$entry"
+lines = open(f).readlines()
+inserted = False
+for i, line in enumerate(lines):
+    if line.startswith("- [ ]"):
+        lines.insert(i, entry + "\n")
+        inserted = True
+        break
+if not inserted:
+    lines.append(entry + "\n")
+open(f, "w").writelines(lines)
+PYEOF
     else
         echo "$entry" >> "$file"
     fi
@@ -161,9 +164,60 @@ for i, line in enumerate(lines):
         break
 open(f, "w").write("\n".join(lines))
 PYEOF
+        # 自动同步 prd-todo: 如果队列任务关键词匹配 prd-todo 中的未完成项，标记为 ✅
+        sync_prd_todo "$project" "$file"
+        
         echo "OK: 任务已完成"
     else
         return 1
+    fi
+}
+
+# 队列任务完成后，检查 prd-todo.md 是否有对应项可以标记完成
+sync_prd_todo() {
+    local project="$1" queue_file="$2"
+    
+    # 找到项目目录
+    local project_dir=""
+    local conf="$HOME/.autopilot/watchdog-projects.conf"
+    if [ -f "$conf" ]; then
+        while IFS=: read -r w d _rest; do
+            local w_safe
+            w_safe=$(sanitize "$w")
+            if [ "$w_safe" = "$project" ]; then
+                project_dir="$d"
+                break
+            fi
+        done < <(grep -v '^#' "$conf" | grep -v '^$')
+    fi
+    [ -n "$project_dir" ] || return 0
+    
+    local prd_todo="${project_dir}/prd-todo.md"
+    [ -f "$prd_todo" ] || return 0
+    
+    # 提取刚完成的任务描述（最近的 [x] 行）
+    local done_task
+    done_task=$(grep -m1 '^\- \[x\].*done:' "$queue_file" | tail -1 | sed 's/^- \[x\] //; s/ | added:.*$//')
+    [ -n "$done_task" ] || return 0
+    
+    # 提取关键词（取前 3 个非停用词）
+    local keywords
+    keywords=$(echo "$done_task" | tr '：:，, ' '\n' | grep -v '^$' | head -3)
+    
+    # 在 prd-todo 中搜索匹配的未完成项
+    local matched=false
+    while IFS= read -r kw; do
+        [ -n "$kw" ] || continue
+        # 检查 prd-todo 中是否有包含该关键词的未完成行
+        if grep -q "^- .*${kw}" "$prd_todo" 2>/dev/null && \
+           grep "^- .*${kw}" "$prd_todo" | grep -qv '✅' 2>/dev/null; then
+            matched=true
+            break
+        fi
+    done <<< "$keywords"
+    
+    if $matched; then
+        echo "INFO: prd-todo.md 中可能有对应项可标记完成，需人工确认"
     fi
 }
 
