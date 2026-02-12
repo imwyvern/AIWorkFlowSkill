@@ -436,7 +436,8 @@ fi
 
 # Layer 2: 消费 watchdog 写的增量 review trigger 文件
 if ! $REPORT_ONLY && [ -x "${SCRIPT_DIR}/consume-review-trigger.sh" ]; then
-    "${SCRIPT_DIR}/consume-review-trigger.sh" >> "$HOME/.autopilot/logs/watchdog.log" 2>&1
+    # 后台执行，不阻塞 monitor-all 的 JSON 输出
+    "${SCRIPT_DIR}/consume-review-trigger.sh" >> "$HOME/.autopilot/logs/watchdog.log" 2>&1 &
 elif $REPORT_ONLY; then
     >&2 echo "monitor-all: report-only mode active, skipping review trigger consumption"
 fi
