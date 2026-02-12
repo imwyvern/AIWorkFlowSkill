@@ -888,6 +888,13 @@ check_incremental_review_trigger() {
     elif [ "$time_since_review" -ge "$REVIEW_COOLDOWN" ] && [ "$count" -gt 0 ]; then
         should_trigger=true
     fi
+    # 快速 re-review：如果上次 review 有问题（issues 文件存在），降低触发门槛
+    # 只需 3 个 fix commit + 30 分钟冷却
+    local issues_file="${STATE_DIR}/autocheck-issues-${safe}"
+    if [ -f "$issues_file" ] && [ "$count" -ge 3 ] && [ "$time_since_review" -ge 1800 ]; then
+        should_trigger=true
+        log "🔄 ${window}: fast re-review triggered (${count} fix commits, issues pending)"
+    fi
     [ "$should_trigger" = "false" ] && return
 
     # 条件2: 当前是 idle 状态
