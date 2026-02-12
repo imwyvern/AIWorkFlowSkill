@@ -1,6 +1,0 @@
-{
-  "date": "2026-02-11",
-  "type": "incremental",
-  "issues": "layer2: CLEAN range: git diff c3161cca7d68d1df08e58d8658b3a66319bf3ae8..HEAD --name-only --diff-filter=ACMR head: f824728a95e989c41cb11b97bec316a57a58c3a6 files_reviewed: 62 notes: monitor-all report now emphasizes lifecycle phase, review status, aggregate progress, and omits the old context% metric; DAILY tokens and heartbeat JSON also document the new fields, and the rest of the touched scripts/state/lo. ",
-  "commit": "f824728a95e989c41cb11b97bec316a57a58c3a6"
-}
