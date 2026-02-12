@@ -717,7 +717,16 @@ handle_idle() {
 
         local nudge_reason="idle"
         local git_dirty
-        git_dirty=$(git -C "$project_dir" status --porcelain 2>/dev/null || true)
+        # 过滤运行时文件(status.json, prd-progress.json, .code-review/, locks/, logs/, state/)
+        # 只关注有实质代码改动的 dirty
+        git_dirty=$(git -C "$project_dir" status --porcelain 2>/dev/null \
+            | grep -v 'status\.json' \
+            | grep -v 'prd-progress\.json' \
+            | grep -v '\.code-review/' \
+            | grep -v 'locks/' \
+            | grep -v 'logs/' \
+            | grep -v 'state/' \
+            || true)
         if [ -n "$git_dirty" ]; then
             local dirty_summary
             dirty_summary=$(printf '%s' "$git_dirty" | head -n 5 | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')
