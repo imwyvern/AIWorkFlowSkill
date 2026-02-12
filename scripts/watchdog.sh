@@ -520,14 +520,28 @@ handle_idle() {
             nudge_msg=$(get_smart_nudge "$safe" "$project_dir")
         fi
 
+        local nudge_reason="idle"
+        local git_dirty
+        git_dirty=$(git -C "$project_dir" status --porcelain 2>/dev/null || true)
+        if [ -n "$git_dirty" ]; then
+            local dirty_summary
+            dirty_summary=$(printf '%s' "$git_dirty" | head -n 5 | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')
+            [ -z "$dirty_summary" ] && dirty_summary="uncommitted changes"
+            nudge_msg="当前仓库存在未提交改动（${dirty_summary:0:120}），请先提交/暂存再继续新任务。"
+            nudge_reason="git_dirty"
+            log "🛠 ${window}: dirty tree detected before idle nudge; nudging to commit"
+        fi
+
         if send_tmux_message "$window" "$nudge_msg" "idle nudge"; then
-            [ "$used_issues_file" = "true" ] && rm -f "$issues_file"
-            [ "$used_prd_issues_file" = "true" ] && rm -f "$prd_issues_file"
+            if [ "$nudge_reason" != "git_dirty" ]; then
+                [ "$used_issues_file" = "true" ] && rm -f "$issues_file"
+                [ "$used_prd_issues_file" = "true" ] && rm -f "$prd_issues_file"
+            fi
             set_cooldown "$key"
             echo $((nudge_count + 1)) > "$nudge_count_file"
             log "📤 ${window}: auto-nudged #$((nudge_count+1)) (idle ${idle_secs}s) — ${nudge_msg:0:80}"
             start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "idle nudge"
-            sync_project_status "$project_dir" "nudge_sent" "window=${window}" "reason=idle" "state=idle"
+            sync_project_status "$project_dir" "nudge_sent" "window=${window}" "reason=${nudge_reason}" "state=idle"
         fi
     fi
     release_lock "$safe"
