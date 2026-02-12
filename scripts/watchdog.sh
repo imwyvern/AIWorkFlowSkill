@@ -574,11 +574,8 @@ handle_idle() {
         fi
     fi
 
-    # 队列任务检查（在退避之前！用户主动提交的任务不应被退避阻塞）
-    local has_queue_task=false
-    local queue_task_preview
-    queue_task_preview=$("${SCRIPT_DIR}/task-queue.sh" next "$safe" 2>/dev/null || true)
-    [ -n "$queue_task_preview" ] && has_queue_task=true
+    # 复用之前的队列检查结果（避免重复调用 task-queue.sh）
+    local has_queue_task="$has_queue_task_early"
 
     # 指数退避: nudge 次数越多，冷却越长 (300, 600, 1200, 2400, 4800, 9600)
     # 但队列任务绕过退避（用户主动提交 = 最高优先级）
