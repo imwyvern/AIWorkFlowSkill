@@ -15,6 +15,7 @@ LAYER2_FILE_PREVIEW_LIMIT="${LAYER2_FILE_PREVIEW_LIMIT:-20}"
 LAYER2_FALLBACK_COMMIT_WINDOW="${LAYER2_FALLBACK_COMMIT_WINDOW:-30}"
 TSC_TIMEOUT_SECONDS="${TSC_TIMEOUT_SECONDS:-30}"
 REVIEW_OUTPUT_WAIT_SECONDS="${REVIEW_OUTPUT_WAIT_SECONDS:-90}"
+REVIEW_TRIGGER_STALE_SECONDS="${REVIEW_TRIGGER_STALE_SECONDS:-7200}"
 
 # 数字清洗
 normalize_int() {
@@ -200,6 +201,13 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         rm -f "$trigger_file"
         continue
     fi
+    trigger_mtime=$(stat -f %m "$trigger_file" 2>/dev/null || echo 0)
+    trigger_age=$(( $(now_ts) - trigger_mtime ))
+    stale_trigger=false
+    if [ "$trigger_age" -ge "$REVIEW_TRIGGER_STALE_SECONDS" ]; then
+        stale_trigger=true
+        log "⚠️ ${safe}: review trigger stale (${trigger_age}s) — forcing consumption"
+    fi
 
     log "🔍 ${safe}: consuming incremental review trigger for ${project_dir}"
 
@@ -209,7 +217,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     review_output_file="${STATE_DIR}/layer2-review-${safe}.txt"
 
     # M-5: 非 idle 不消费 trigger，留待下轮
-    if ! is_codex_idle "$window"; then
+    if ! $stale_trigger && ! is_codex_idle "$window"; then
         log "⏭ ${safe}: Codex not idle, keep trigger for next round"
         continue
     fi
