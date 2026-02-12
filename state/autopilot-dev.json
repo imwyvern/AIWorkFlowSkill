@@ -1,10 +1,11 @@
 {
-  "status": "idle",
-  "context_num": 64,
-  "head": "4e61883",
-  "commit_msg": "fix: P0+P1 fixes from Claude v5 review (JSON injection, PID lock, PRD issues cle",
-  "commit_time": 1770836376,
-  "commits_30m": 1,
+  "status": "absent",
+  "context_num": -1,
+  "head": "772ee2e",
+  "commit_msg": "feat: skip idle nudge when PRD complete",
+  "commit_time": 1770891862,
+  "commits_30m": 0,
   "working_no_commit": 0,
-  "last_check": 1770836414
+  "tokens_today": 13194304,
+  "last_check": 1770894012
 }

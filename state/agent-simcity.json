@@ -1,10 +1,11 @@
 {
-  "status": "idle",
-  "context_num": 37,
-  "head": "d7940f7",
-  "commit_msg": "chore(prd): mark completed todo items with checkmarks",
-  "commit_time": 1770835827,
-  "commits_30m": 4,
+  "status": "absent",
+  "context_num": -1,
+  "head": "d1de7c3",
+  "commit_msg": "fix: support 100% tip fee",
+  "commit_time": 1770891807,
+  "commits_30m": 0,
   "working_no_commit": 0,
-  "last_check": 1770836414
+  "tokens_today": 4017428,
+  "last_check": 1770894012
 }
