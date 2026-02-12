@@ -2925,3 +2925,11 @@
 [2026-02-12 04:41:28] ✅ replyher_android-2: idle nudge ack by working state
 [2026-02-12 04:43:30] 📝 Shike: new commit (+1, total since review: 53) — chore: checkpoint workspace state
 [2026-02-12 04:44:41] 📝 replyher_android-2: new commit (+1, total since review: 53) — feat: add pointer to key preview
+[2026-02-12 04:45:42] 📝 autopilot-dev: new commit (+1, total since review: 43) — fix(nudge): reduce guard timers — 30min→10min prd-done, 5min→90s manual-task
+[2026-02-12 04:46:37] ✅ autopilot-dev: PRD verify passed for 6ee1da5
+[2026-02-12 04:46:47] 📊 Shike: state=idle
+[2026-02-12 04:46:58] 📊 agent-simcity: state=idle
+[2026-02-12 04:47:08] ℹ️ agent-simcity: PRD complete, no pending issues, low-freq nudge
+[2026-02-12 04:47:08] 📊 replyher_android-2: state=idle
+[2026-02-12 04:47:18] 📊 autopilot-dev: state=idle
+[2026-02-12 04:48:39] ℹ️ Shike: PRD complete, no pending issues, low-freq nudge

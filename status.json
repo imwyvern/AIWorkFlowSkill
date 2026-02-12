@@ -4,9 +4,9 @@
   "phases": {
     "dev": {
       "status": "in_progress",
-      "last_commit": "746df3a7f4b8264f1cf1891785fa3bee3ce0beb6",
+      "last_commit": "6ee1da5aae58937a3eebacfdbd6002d0e0a8b531",
       "new_commits": 1,
-      "since_review": 42
+      "since_review": 43
     },
     "review": {
       "status": "in_progress",
@@ -25,17 +25,17 @@
     "prd": {
       "status": "verified",
       "last_result": "pass",
-      "last_verified_at": "2026-02-12T12:37:43Z"
+      "last_verified_at": "2026-02-12T12:46:37Z"
     }
   },
-  "updated_at": "2026-02-12T12:37:43Z",
+  "updated_at": "2026-02-12T12:46:37Z",
   "autopilot": {
     "last_event": "prd_verify_pass",
-    "last_sync_at": "2026-02-12T12:37:43Z",
+    "last_sync_at": "2026-02-12T12:46:37Z",
     "last_window": "autopilot-dev",
     "last_state": "working",
-    "last_head": "746df3a7f4b8264f1cf1891785fa3bee3ce0beb6",
-    "last_since_review": 42,
+    "last_head": "6ee1da5aae58937a3eebacfdbd6002d0e0a8b531",
+    "last_since_review": 43,
     "last_new_commits": 1,
     "last_reason": "idle",
     "nudge_count": 23,

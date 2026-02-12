@@ -367,6 +367,9 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         echo 0 > "${COMMIT_COUNT_DIR}/${safe}-since-review"
         now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
         rm -f "${STATE_DIR}/autocheck-issues-${safe}"
+        # Review CLEAN → reset nudge backoff (Codex proved responsive)
+        echo 0 > "${COOLDOWN_DIR}/nudge-count-${safe}" 2>/dev/null || true
+        rm -f "${STATE_DIR}/alert-stalled-${safe}" 2>/dev/null || true
         sync_project_status "$project_dir" "review_clean" "window=${window}" "state=idle"
         # Telegram 通知 CLEAN
         notify_review_result "✅ ${window} Review CLEAN 🟢 本轮迭代完成，代码质量达标！"
