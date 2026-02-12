@@ -74,6 +74,36 @@ count_prd_todo_remaining() {
     echo "$remaining"
 }
 
+# 检测 prd-todo.md 是否有新增待办（对比上次快照）
+detect_prd_todo_changes() {
+    local safe="$1" project_dir="$2"
+    local prd_todo="${project_dir}/prd-todo.md"
+    local snapshot_file="${STATE_DIR}/prd-snapshot-${safe}.md5"
+    
+    [ -f "$prd_todo" ] || return 1
+    
+    local current_hash
+    if command -v md5 >/dev/null 2>&1; then
+        current_hash=$(md5 -q "$prd_todo" 2>/dev/null)
+    elif command -v md5sum >/dev/null 2>&1; then
+        current_hash=$(md5sum "$prd_todo" | awk '{print $1}')
+    else
+        return 1
+    fi
+    
+    local prev_hash
+    prev_hash=$(cat "$snapshot_file" 2>/dev/null || echo "")
+    
+    # 保存当前快照
+    echo "$current_hash" > "$snapshot_file"
+    
+    # 首次运行不算变化
+    [ -z "$prev_hash" ] && return 1
+    
+    # hash 不同 = 有变化
+    [ "$current_hash" != "$prev_hash" ]
+}
+
 is_prd_todo_complete() {
     [ "$(count_prd_todo_remaining "$1")" -eq 0 ]
 }
@@ -1038,6 +1068,18 @@ while true; do
 
         # Layer 1: 检测新 commit 并自动检查
         check_new_commits "$window" "$safe" "$project_dir"
+
+        # 检测 prd-todo.md 变化（新需求加入）→ 重置 nudge 计数，重新激活
+        if detect_prd_todo_changes "$safe" "$project_dir"; then
+            local new_remaining
+            new_remaining=$(count_prd_todo_remaining "$project_dir")
+            if [ "$new_remaining" -gt 0 ]; then
+                log "📋 ${window}: prd-todo.md updated, ${new_remaining} items remaining — resetting nudge"
+                echo 0 > "${COOLDOWN_DIR}/nudge-count-${safe}"
+                rm -f "${STATE_DIR}/alert-stalled-${safe}"
+                send_telegram_alert "$window" "prd-todo.md 有新需求 (${new_remaining} 项待完成)，已重新激活 nudge"
+            fi
+        fi
 
         case "$state" in
             working)
