@@ -653,7 +653,33 @@ handle_idle() {
             return
         fi
 
-        # 优先级 2: Layer 1 自动检查发现的问题
+        # 优先级 2: 任务队列（用户手动提交的 bug/需求）
+        local queue_task
+        queue_task=$("${SCRIPT_DIR}/task-queue.sh" next "$safe" 2>/dev/null || true)
+        if [ -n "$queue_task" ]; then
+            # 截断到合理长度
+            nudge_msg="${queue_task:0:280}"
+            if send_tmux_message "$window" "$nudge_msg" "queue task"; then
+                "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
+                set_cooldown "$key"
+                echo 0 > "$nudge_count_file"  # 队列任务重置退避计数
+                log "📋 ${window}: queue task sent — ${nudge_msg:0:80}"
+                start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "queue task"
+                sync_project_status "$project_dir" "queue_task_sent" "window=${window}" "state=idle"
+                # 通知 Telegram
+                local tg_token tg_chat
+                tg_token=$(grep '^bot_token' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+                tg_chat=$(grep '^chat_id' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+                if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
+                    curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
+                        -d chat_id="$tg_chat" --data-urlencode "text=📋 ${window}: 开始处理队列任务 — ${nudge_msg:0:100}" >/dev/null 2>&1 &
+                fi
+            fi
+            release_lock "$safe"
+            return
+        fi
+
+        # 优先级 3: Layer 1 自动检查发现的问题
         local issues_file="${STATE_DIR}/autocheck-issues-${safe}"
         local prd_issues_file="${STATE_DIR}/prd-issues-${safe}"
         local used_issues_file=false
@@ -786,6 +812,30 @@ check_new_commits() {
 
     log "📝 ${window}: new commit (+${new_commits}, total since review: ${count}) — ${msg}"
     sync_project_status "$project_dir" "commit" "window=${window}" "head=${current_head}" "new_commits=${new_commits}" "since_review=${count}" "state=working"
+
+    # 队列任务完成检测：如果有进行中的队列任务，新 commit = 任务完成
+    local queue_in_progress
+    queue_in_progress=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${safe}.md" 2>/dev/null || echo 0)
+    if [ "$queue_in_progress" -gt 0 ]; then
+        "${SCRIPT_DIR}/task-queue.sh" done "$safe" "${current_head:0:7}" 2>/dev/null || true
+        log "📋✅ ${window}: queue task completed (commit ${current_head:0:7})"
+        # 检查是否还有更多队列任务
+        local remaining
+        remaining=$("${SCRIPT_DIR}/task-queue.sh" count "$safe" 2>/dev/null || echo 0)
+        if [ "$remaining" -gt 0 ]; then
+            log "📋 ${window}: ${remaining} more tasks in queue"
+        fi
+        # Telegram 通知完成
+        local tg_token tg_chat
+        tg_token=$(grep '^bot_token' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+        tg_chat=$(grep '^chat_id' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+        if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
+            local done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
+            [ "$remaining" -gt 0 ] && done_msg="${done_msg}\n📋 还剩 ${remaining} 个任务待处理"
+            curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
+                -d chat_id="$tg_chat" --data-urlencode "text=${done_msg}" >/dev/null 2>&1 &
+        fi
+    fi
 
     # Layer 1 自动检查
     run_auto_checks "$window" "$safe" "$project_dir" "$msg"
