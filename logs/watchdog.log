@@ -2910,3 +2910,18 @@
 [2026-02-12 04:33:24] ✅ autopilot-dev: PRD verify passed for 88b6a6c
 [2026-02-12 04:35:27] 🗜 Shike: sent /compact
 [2026-02-12 04:35:47] 📝 replyher_android-2: new commit (+1, total since review: 52) — fix: refine key popup display
+[2026-02-12 04:36:48] 📝 autopilot-dev: new commit (+1, total since review: 42) — fix(critical): prevent watchdog nudge from overwriting manual tasks
+[2026-02-12 04:37:43] ✅ autopilot-dev: PRD verify passed for 746df3a
+[2026-02-12 04:40:11] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
+[2026-02-12 04:40:11] [review-consumer] ⏭ Shike: Codex not idle, keep trigger for next round
+[2026-02-12 04:40:11] [review-consumer] 🔍 agent-simcity: consuming incremental review trigger for /Users/wes/projects/agent-simcity
+[2026-02-12 04:40:11] [review-consumer] ⏭ agent-simcity: Codex not idle, keep trigger for next round
+[2026-02-12 04:40:11] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 04:40:11] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
+[2026-02-12 04:40:11] [review-consumer] 🔍 replyher_android-2: consuming incremental review trigger for /Users/wes/replyher_android-2
+[2026-02-12 04:40:11] [review-consumer] ⏭ replyher_android-2: Codex not idle, keep trigger for next round
+[2026-02-12 04:41:17] 🛠 replyher_android-2: dirty tree detected before idle nudge; nudging to commit
+[2026-02-12 04:41:18] 📤 replyher_android-2: auto-nudged #1 (idle 310s) — 当前仓库存在未提交改动（ M .env.example  M docs/dictionary-scale-res
+[2026-02-12 04:41:28] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-12 04:43:30] 📝 Shike: new commit (+1, total since review: 53) — chore: checkpoint workspace state
+[2026-02-12 04:44:41] 📝 replyher_android-2: new commit (+1, total since review: 53) — feat: add pointer to key preview

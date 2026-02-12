@@ -534,11 +534,18 @@ handle_idle() {
         has_pending_work=true
     fi
     if is_prd_todo_complete "$project_dir" && [ "$has_pending_work" = "false" ]; then
-        # PRD 完成 + 无 pending issues → 降低 nudge 频率（每 30 分钟最多一次）
-        local prd_done_cooldown_key="prd-done-nudge-${safe}"
-        in_cooldown "$prd_done_cooldown_key" 1800 && return
-        set_cooldown "$prd_done_cooldown_key"
-        log "ℹ️ ${window}: PRD complete, no pending issues, low-freq nudge"
+        # PRD 完成 + 无 pending issues → 检查 review 状态决定下一步
+        local review_file="${STATE_DIR}/layer2-review-${safe}.txt"
+        if [ -f "$review_file" ] && ! grep -qi "CLEAN" "$review_file" 2>/dev/null; then
+            # review 有问题 → 正常 nudge 频率修复
+            log "ℹ️ ${window}: PRD complete but review has issues, normal nudge"
+        else
+            # 真的没事做了 → 降低频率（每 10 分钟一次）
+            local prd_done_cooldown_key="prd-done-nudge-${safe}"
+            in_cooldown "$prd_done_cooldown_key" 600 && return
+            set_cooldown "$prd_done_cooldown_key"
+            log "ℹ️ ${window}: PRD complete + review clean, low-freq nudge"
+        fi
     fi
 
     # 检查是否有手动任务在 pending（5 分钟内发的手动消息 → 暂停 nudge）
@@ -548,12 +555,12 @@ handle_idle() {
         manual_ts=$(cat "$manual_task_file" 2>/dev/null || echo 0)
         manual_ts=$(normalize_int "$manual_ts")
         local manual_age=$(( $(now_ts) - manual_ts ))
-        if [ "$manual_age" -lt 300 ]; then
+        if [ "$manual_age" -lt 90 ]; then
             log "⏭ ${window}: manual task sent ${manual_age}s ago, skipping nudge"
             release_lock "$safe" 2>/dev/null || true
             return
         else
-            # 超过 5 分钟，清理标记
+            # 超过 90 秒，清理标记（Codex 应该已经开始处理了）
             rm -f "$manual_task_file"
         fi
     fi
