@@ -2933,3 +2933,18 @@
 [2026-02-12 04:47:08] 📊 replyher_android-2: state=idle
 [2026-02-12 04:47:18] 📊 autopilot-dev: state=idle
 [2026-02-12 04:48:39] ℹ️ Shike: PRD complete, no pending issues, low-freq nudge
+[2026-02-12 04:50:11] 🛠 replyher_android-2: dirty tree detected before idle nudge; nudging to commit
+[2026-02-12 04:50:11] 📤 replyher_android-2: auto-nudged #1 (idle 309s) — 当前仓库存在未提交改动（?? status.json），请先提交/暂存再�
+[2026-02-12 04:50:15] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
+[2026-02-12 04:50:15] [review-consumer] ⏭ Shike: Codex not idle, keep trigger for next round
+[2026-02-12 04:50:15] [review-consumer] 🔍 agent-simcity: consuming incremental review trigger for /Users/wes/projects/agent-simcity
+[2026-02-12 04:50:15] [review-consumer] ⏭ agent-simcity: Codex not idle, keep trigger for next round
+[2026-02-12 04:50:15] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 04:50:15] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
+[2026-02-12 04:50:15] [review-consumer] 🔍 replyher_android-2: consuming incremental review trigger for /Users/wes/replyher_android-2
+[2026-02-12 04:50:15] [review-consumer] ⏭ replyher_android-2: Codex not idle, keep trigger for next round
+[2026-02-12 04:50:21] 📝 autopilot-dev: new commit (+1, total since review: 44) — fix(nudge): reset backoff on review CLEAN, per Codex review suggestion
+[2026-02-12 04:50:21] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-12 04:51:16] ✅ autopilot-dev: PRD verify passed for 1347c44
+[2026-02-12 04:51:47] 🛑 Received SIGTERM, shutting down...
+[2026-02-12 04:51:49] 🚀 Watchdog v4 started (tick=10s, idle_threshold=300s, idle_confirm=3, inertia=90s, projects=4, pid=34234)

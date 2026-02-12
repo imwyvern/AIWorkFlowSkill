@@ -1138,7 +1138,6 @@ while true; do
 
         # 检测 prd-todo.md 变化（新需求加入）→ 重置 nudge 计数，重新激活
         if detect_prd_todo_changes "$safe" "$project_dir"; then
-            local new_remaining
             new_remaining=$(count_prd_todo_remaining "$project_dir")
             if [ "$new_remaining" -gt 0 ]; then
                 log "📋 ${window}: prd-todo.md updated, ${new_remaining} items remaining — resetting nudge"
