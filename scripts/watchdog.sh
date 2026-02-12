@@ -208,6 +208,9 @@ send_tmux_message() {
         return "$rc"
     fi
 
+    # 保存最后成功发送的 nudge 内容（供 pre-compact 快照使用）
+    echo "$message" > "${STATE_DIR}/last-nudge-msg-${safe_w}" 2>/dev/null || true
+
     return 0
 }
 
@@ -655,14 +658,38 @@ handle_idle() {
             return
         fi
 
-        # 优先级 1: post-compact 恢复协议
+        # 优先级 1: post-compact 恢复协议（带上下文快照）
         local compact_flag="${STATE_DIR}/post-compact-${safe}"
         if [ -f "$compact_flag" ]; then
-            nudge_msg="compaction完成。先阅读 CONVENTIONS.md 与 prd-todo.md（必要时对照 prd-items.yaml / prd-progress.json），然后继续下一个任务。"
+            # 从快照中恢复具体上下文
+            local snapshot_file="${STATE_DIR}/pre-compact-snapshot-${safe}"
+            local uncommitted="" recent_work="" queue_task="" last_nudge=""
+            if [ -f "$snapshot_file" ]; then
+                uncommitted=$(grep '^UNCOMMITTED_FILES:' "$snapshot_file" | sed 's/^UNCOMMITTED_FILES: //' || true)
+                recent_work=$(grep '^RECENT_COMMITS:' "$snapshot_file" | sed 's/^RECENT_COMMITS: //' || true)
+                queue_task=$(grep '^QUEUE_IN_PROGRESS:' "$snapshot_file" | sed 's/^QUEUE_IN_PROGRESS: //' || true)
+                last_nudge=$(grep '^LAST_NUDGE:' "$snapshot_file" | sed 's/^LAST_NUDGE: //' || true)
+            fi
+
+            # 构造有针对性的恢复消息
+            nudge_msg="compaction完成。先阅读 CONVENTIONS.md 与 prd-todo.md。"
+            # 未提交改动 — 最高优先级
+            if [ -n "$uncommitted" ]; then
+                nudge_msg="${nudge_msg} 重要: 有未提交的改动(${uncommitted:0:100}),请先检查并commit。"
+            fi
+            # 恢复具体任务
+            if [ -n "$queue_task" ]; then
+                nudge_msg="${nudge_msg} 之前正在做: ${queue_task:0:100}。"
+            elif [ -n "$last_nudge" ]; then
+                nudge_msg="${nudge_msg} 之前的任务: ${last_nudge:0:120}。"
+            elif [ -n "$recent_work" ]; then
+                nudge_msg="${nudge_msg} 最近工作方向: ${recent_work:0:100}。"
+            fi
+
             if send_tmux_message "$window" "$nudge_msg" "post-compact recovery nudge"; then
-                rm -f "$compact_flag"
+                rm -f "$compact_flag" "$snapshot_file"
                 set_cooldown "$key"
-                log "🔄 ${window}: post-compact recovery nudge sent"
+                log "🔄 ${window}: post-compact recovery nudge sent (with snapshot)"
                 start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "post-compact recovery nudge"
                 sync_project_status "$project_dir" "nudge_sent" "window=${window}" "reason=post_compact" "state=idle"
             fi
@@ -761,6 +788,32 @@ handle_low_context() {
     local state2
     state2=$(detect_state "$window" "$safe")
     if [ "$state2" = "idle_low_context" ]; then
+        # ★ compact 前保存上下文快照：未提交改动 + 最近任务 + 队列状态
+        local snapshot_file="${STATE_DIR}/pre-compact-snapshot-${safe}"
+        {
+            echo "# Pre-compact snapshot $(date '+%Y-%m-%d %H:%M:%S')"
+            # 未提交改动
+            local dirty_files
+            dirty_files=$(git -C "$project_dir" diff --name-only 2>/dev/null | head -10 || true)
+            local staged_files
+            staged_files=$(git -C "$project_dir" diff --cached --name-only 2>/dev/null | head -10 || true)
+            if [ -n "$dirty_files" ] || [ -n "$staged_files" ]; then
+                echo "UNCOMMITTED_FILES: ${dirty_files} ${staged_files}"
+            fi
+            # 最近 commit（反映当前工作方向）
+            local recent
+            recent=$(git -C "$project_dir" log --oneline -3 --format="%s" 2>/dev/null | tr '\n' '; ' || true)
+            [ -n "$recent" ] && echo "RECENT_COMMITS: ${recent}"
+            # 队列中进行中的任务
+            local queue_task
+            queue_task=$(grep -m1 '^\- \[→\]' "${HOME}/.autopilot/task-queue/${safe}.md" 2>/dev/null | sed 's/^- \[→\] //; s/ | added:.*$//' || true)
+            [ -n "$queue_task" ] && echo "QUEUE_IN_PROGRESS: ${queue_task}"
+            # 最后一次 nudge 内容
+            local last_nudge_file="${STATE_DIR}/last-nudge-msg-${safe}"
+            [ -f "$last_nudge_file" ] && echo "LAST_NUDGE: $(cat "$last_nudge_file")"
+        } > "$snapshot_file"
+        log "📸 ${window}: saved pre-compact snapshot"
+
         if send_tmux_message "$window" "/compact" "compact"; then
             set_cooldown "$key"
             log "🗜 ${window}: sent /compact"
