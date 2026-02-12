@@ -524,7 +524,7 @@ handle_idle() {
     # 二次检查
     local state2
     state2=$(detect_state "$window" "$safe")
-    if [ "$state2" = "idle" ]; then
+    if [ "$state2" = "idle" ] || [ "$state2" = "idle_low_context" ]; then
         local nudge_msg before_head before_ctx before_status_json
         before_head=$(run_with_timeout 10 git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "none")
         before_status_json=$(get_window_status_json "$window")

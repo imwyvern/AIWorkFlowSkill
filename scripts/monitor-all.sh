@@ -16,7 +16,9 @@
 #   - context 跨过阈值（>LOW_CONTEXT_THRESHOLD, >LOW_CONTEXT_CRITICAL_THRESHOLD）
 #   - 连续 3 轮无 commit 但 working（追踪但不告警）
 
-set -euo pipefail
+set -uo pipefail
+# NOTE: do NOT add set -e; codex-status.sh returns exit 1 for idle/permission,
+# and many grep/jq commands may legitimately return non-zero.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
