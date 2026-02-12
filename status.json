@@ -1,17 +1,17 @@
 {
   "project": ".autopilot",
-  "phase": "dev",
+  "phase": "review",
   "phases": {
     "dev": {
       "status": "in_progress",
-      "last_commit": "886a29da36c4822ed3c307a31bda36f1c6c1125d",
-      "new_commits": 1,
-      "since_review": 45
+      "last_commit": "4990314cf372a481907eaa77e7b77ad8f104102c",
+      "new_commits": 2,
+      "since_review": 46
     },
     "review": {
       "status": "in_progress",
-      "round": 2,
-      "since_review": 32,
+      "round": 3,
+      "since_review": 46,
       "issues": [
         "layer2: CLEAN range: git diff c3161cca7d68d1df08e58d8658b3a66319bf3ae8..HEAD --name-only --diff-filter=ACMR head: f824728a95e989c41cb11b97bec316a57a58c3a6 files_reviewed: 62 notes: monitor-all report now emphasizes lifecycle phase, review s"
       ]
@@ -25,20 +25,20 @@
     "prd": {
       "status": "verified",
       "last_result": "pass",
-      "last_verified_at": "2026-02-12T12:54:57Z"
+      "last_verified_at": "2026-02-12T13:54:30Z"
     }
   },
-  "updated_at": "2026-02-12T13:51:12Z",
+  "updated_at": "2026-02-12T14:01:58Z",
   "autopilot": {
     "last_event": "nudge_sent",
-    "last_sync_at": "2026-02-12T13:51:12Z",
+    "last_sync_at": "2026-02-12T14:01:58Z",
     "last_window": "autopilot-dev",
     "last_state": "idle",
-    "last_head": "886a29da36c4822ed3c307a31bda36f1c6c1125d",
-    "last_since_review": 45,
-    "last_new_commits": 1,
+    "last_head": "4990314cf372a481907eaa77e7b77ad8f104102c",
+    "last_since_review": 46,
+    "last_new_commits": 2,
     "last_reason": "git_dirty",
-    "nudge_count": 25,
+    "nudge_count": 26,
     "last_issues": "layer2: CLEAN range: git diff c3161cca7d68d1df08e58d8658b3a66319bf3ae8..HEAD --name-only --diff-filter=ACMR head: f824728a95e989c41cb11b97bec316a57a58c3a6 files_reviewed: 62 notes: monitor-all report now emphasizes lifecycle phase, review s",
     "unknown_event_count": 3,
     "last_unknown_event": "nudge_blocked_manual",
