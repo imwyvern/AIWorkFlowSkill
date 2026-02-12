@@ -565,33 +565,44 @@ handle_idle() {
         fi
     fi
 
+    # 队列任务检查（在退避之前！用户主动提交的任务不应被退避阻塞）
+    local has_queue_task=false
+    local queue_task_preview
+    queue_task_preview=$("${SCRIPT_DIR}/task-queue.sh" next "$safe" 2>/dev/null || true)
+    [ -n "$queue_task_preview" ] && has_queue_task=true
+
     # 指数退避: nudge 次数越多，冷却越长 (300, 600, 1200, 2400, 4800, 9600)
+    # 但队列任务绕过退避（用户主动提交 = 最高优先级）
     local nudge_count_file="${COOLDOWN_DIR}/nudge-count-${safe}"
     local nudge_count
     nudge_count=$(cat "$nudge_count_file" 2>/dev/null || echo 0)
     nudge_count=$(normalize_int "$nudge_count")
 
-    # 超过 6 次无响应 → 停止 nudge，发一次 Telegram 告警
-    if [ "$nudge_count" -ge 6 ]; then
-        local alert_file="${STATE_DIR}/alert-stalled-${safe}"
-        if ! [ -f "$alert_file" ]; then
-            touch "$alert_file"
-            log "🚨 ${window}: stalled after ${nudge_count} nudges, stopping auto-nudge"
-            # 可选: Telegram 告警
-            local tg_token tg_chat
-            tg_token=$(grep '^bot_token' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
-            tg_chat=$(grep '^chat_id' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
-            if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
-                curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
-                    -d chat_id="$tg_chat" -d text="🚨 ${window} 已 nudge ${nudge_count} 次无响应，自动 nudge 已停止。请手动检查。" >/dev/null 2>&1 &
+    if [ "$has_queue_task" = "false" ]; then
+        # 只有非队列任务才受退避限制
+        # 超过 6 次无响应 → 停止 nudge，发一次 Telegram 告警
+        if [ "$nudge_count" -ge 6 ]; then
+            local alert_file="${STATE_DIR}/alert-stalled-${safe}"
+            if ! [ -f "$alert_file" ]; then
+                touch "$alert_file"
+                log "🚨 ${window}: stalled after ${nudge_count} nudges, stopping auto-nudge"
+                local tg_token tg_chat
+                tg_token=$(grep '^bot_token' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
+                tg_chat=$(grep '^chat_id' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
+                if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
+                    curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
+                        -d chat_id="$tg_chat" -d text="🚨 ${window} 已 nudge ${nudge_count} 次无响应，自动 nudge 已停止。请手动检查。" >/dev/null 2>&1 &
+                fi
             fi
+            return
         fi
-        return
-    fi
 
-    local effective_cooldown=$((NUDGE_COOLDOWN * (1 << (nudge_count > 5 ? 5 : nudge_count))))
-    local key="nudge-${safe}"
-    in_cooldown "$key" "$effective_cooldown" && return
+        local effective_cooldown=$((NUDGE_COOLDOWN * (1 << (nudge_count > 5 ? 5 : nudge_count))))
+        local key="nudge-${safe}"
+        in_cooldown "$key" "$effective_cooldown" && return
+    else
+        log "📋 ${window}: queue task pending, bypassing backoff (nudge_count=${nudge_count})"
+    fi
 
     local idle_secs
     idle_secs=$(get_idle_seconds "$safe")
