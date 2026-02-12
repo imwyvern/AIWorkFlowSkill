@@ -2855,3 +2855,54 @@
 [2026-02-12 04:16:38] ℹ️ agent-simcity: PRD complete, no pending issues, low-freq nudge
 [2026-02-12 04:16:59] 🛠 agent-simcity: dirty tree detected before idle nudge; nudging to commit
 [2026-02-12 04:16:59] 📤 agent-simcity: auto-nudged #3 (idle 3512s) — 当前仓库存在未提交改动（ M status.json），请先提交/暂存再�
+[2026-02-12 04:17:09] ℹ️ replyher_android-2: PRD complete, no pending issues, low-freq nudge
+[2026-02-12 04:17:09] ✅ agent-simcity: idle nudge ack by working state
+[2026-02-12 04:17:29] 🛑 replyher_android-2: manual block detected (manual testing. ) — pausing nudges
+[2026-02-12 04:17:40] 📝 autopilot-dev: new commit (+1, total since review: 40) — fix: consume-review local-outside-function crash, move notify_review_result to top-level
+[2026-02-12 04:18:35] ✅ autopilot-dev: PRD verify passed for d3af551
+[2026-02-12 04:18:55] 📝 Shike: new commit (+1, total since review: 51) — feat(buyer): align cross-end buyer flow and notification handling
+[2026-02-12 04:18:55] 🔍 Shike: incremental review triggered (51 commits, 98924s since last review)
+[2026-02-12 04:19:06] 📝 agent-simcity: new commit (+1, total since review: 30) — chore: update status metadata
+[2026-02-12 04:19:06] 🔍 agent-simcity: incremental review triggered (30 commits, 86936s since last review)
+[2026-02-12 04:20:15] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
+[2026-02-12 04:20:15] [review-consumer] ⏭ Shike: Codex not idle, keep trigger for next round
+[2026-02-12 04:20:15] [review-consumer] 🔍 agent-simcity: consuming incremental review trigger for /Users/wes/projects/agent-simcity
+[2026-02-12 04:20:15] [review-consumer] ⏭ agent-simcity: Codex not idle, keep trigger for next round
+[2026-02-12 04:20:15] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 04:20:15] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
+[2026-02-12 04:21:08] ℹ️ autopilot-dev: PRD complete, no pending issues, low-freq nudge
+[2026-02-12 04:22:39] 💥 ERR at line 1096 (code=1)
+[2026-02-12 04:22:39] 📋 replyher_android-2: prd-todo.md updated, 4 items remaining — resetting nudge
+[2026-02-12 04:23:30] 📝 replyher_android-2: new commit (+1, total since review: 50) — docs: track sliding selection completion
+[2026-02-12 04:23:30] 💥 ERR at line 1096 (code=1)
+[2026-02-12 04:23:30] 📋 replyher_android-2: prd-todo.md updated, 3 items remaining — resetting nudge
+[2026-02-12 04:24:21] 📝 replyher_android-2: new commit (+1, total since review: 51) — docs: track sliding selection completion
+[2026-02-12 04:24:21] 🔍 replyher_android-2: incremental review triggered (51 commits, 79449s since last review)
+[2026-02-12 04:29:46] 🛠 replyher_android-2: dirty tree detected before idle nudge; nudging to commit
+[2026-02-12 04:29:47] 📤 replyher_android-2: auto-nudged #1 (idle 305s) — 当前仓库存在未提交改动（ M .env.example  M docs/dictionary-scale-res
+[2026-02-12 04:29:57] ✅ replyher_android-2: idle nudge ack by working state
+[2026-02-12 04:30:12] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
+[2026-02-12 04:30:12] [review-consumer] ⏭ Shike: Codex not idle, keep trigger for next round
+[2026-02-12 04:30:12] [review-consumer] 🔍 agent-simcity: consuming incremental review trigger for /Users/wes/projects/agent-simcity
+[2026-02-12 04:30:12] [review-consumer] ⏭ agent-simcity: Codex not idle, keep trigger for next round
+[2026-02-12 04:30:12] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 04:30:12] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
+[2026-02-12 04:30:12] [review-consumer] 🔍 replyher_android-2: consuming incremental review trigger for /Users/wes/replyher_android-2
+[2026-02-12 04:30:13] [review-consumer] ⏭ replyher_android-2: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:08] 📝 Shike: new commit (+1, total since review: 52) — fix(web): scope auth inflight cache by token and ignore stale responses
+[2026-02-12 04:31:10] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
+[2026-02-12 04:31:10] [review-consumer] ⏭ Shike: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:10] [review-consumer] 🔍 agent-simcity: consuming incremental review trigger for /Users/wes/projects/agent-simcity
+[2026-02-12 04:31:10] [review-consumer] ⏭ agent-simcity: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:10] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 04:31:10] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:10] [review-consumer] 🔍 replyher_android-2: consuming incremental review trigger for /Users/wes/replyher_android-2
+[2026-02-12 04:31:10] [review-consumer] ⏭ replyher_android-2: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:48] [review-consumer] 🔍 Shike: consuming incremental review trigger for /Users/wes/Shike
+[2026-02-12 04:31:48] [review-consumer] ⏭ Shike: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:48] [review-consumer] 🔍 agent-simcity: consuming incremental review trigger for /Users/wes/projects/agent-simcity
+[2026-02-12 04:31:48] [review-consumer] ⏭ agent-simcity: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:48] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 04:31:49] [review-consumer] ⏭ autopilot-dev: Codex not idle, keep trigger for next round
+[2026-02-12 04:31:49] [review-consumer] 🔍 replyher_android-2: consuming incremental review trigger for /Users/wes/replyher_android-2
+[2026-02-12 04:31:49] [review-consumer] ⏭ replyher_android-2: Codex not idle, keep trigger for next round

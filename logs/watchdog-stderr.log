@@ -251,3 +251,5 @@
 /Users/wes/.autopilot/scripts/watchdog.sh: line 772: 74702 Terminated: 15          sleep "$TICK"
 /Users/wes/.autopilot/scripts/watchdog.sh: line 897: 27053 Terminated: 15          sleep "$TICK"
 /Users/wes/.autopilot/scripts/watchdog.sh: line 965:  6791 Terminated: 15          sleep "$TICK"
+/Users/wes/.autopilot/scripts/watchdog.sh: line 1113: local: can only be used in a function
+/Users/wes/.autopilot/scripts/watchdog.sh: line 1113: local: can only be used in a function

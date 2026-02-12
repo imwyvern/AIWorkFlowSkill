@@ -1,27 +1,43 @@
 {
   "meta": {
-    "generated_at": "2026-02-12T12:12:54Z",
+    "generated_at": "2026-02-12T12:17:50Z",
     "project_dir": "/Users/wes/.autopilot",
     "items_file": "/Users/wes/.autopilot/prd-items.yaml",
     "version": "v1.0.0",
     "strict_mode": false,
-    "selected_count": 3,
-    "passed_count": 3,
+    "selected_count": 4,
+    "passed_count": 4,
     "failed_count": 0,
     "no_checks_count": 0,
     "changed_files_filter": [
+      "locks/ack-agent-simcity.lock.d/parent_pid",
+      "locks/ack-agent-simcity.lock.d/pid",
+      "locks/watchdog-main.lock.d/pid",
+      "locks/watchdog-main.lock.d/start_sig",
+      "locks/watchdog-main.lock.d/started_at",
+      "logs/watchdog-stderr.log",
       "logs/watchdog.log",
       "prd-progress.json",
+      "scripts/consume-review-trigger.sh",
       "scripts/watchdog.sh",
-      "state/.last_report",
-      "state/Shike.json",
-      "state/agent-simcity.json",
-      "state/autopilot-dev.json",
-      "state/replyher_android-2.json",
+      "state/prd-snapshot-Shike.md5",
+      "state/prd-snapshot-agent-simcity.md5",
+      "state/prd-snapshot-autopilot-dev.md5",
+      "state/prd-snapshot-replyher_android-2.md5",
+      "state/watchdog-activity/Shike",
       "state/watchdog-activity/autopilot-dev",
+      "state/watchdog-activity/idle-probe-agent-simcity",
+      "state/watchdog-activity/idle-probe-autopilot-dev",
+      "state/watchdog-activity/idle-probe-replyher_android-2",
       "state/watchdog-commits/autopilot-dev-head",
       "state/watchdog-commits/autopilot-dev-since-review",
       "state/watchdog-cooldown/autocheck-autopilot-dev",
+      "state/watchdog-cooldown/nudge-Shike",
+      "state/watchdog-cooldown/nudge-agent-simcity",
+      "state/watchdog-cooldown/nudge-count-Shike",
+      "state/watchdog-cooldown/nudge-count-agent-simcity",
+      "state/watchdog-cooldown/prd-done-nudge-Shike",
+      "state/watchdog-cooldown/prd-done-nudge-agent-simcity",
       "status.json"
     ],
     "only_type": "all",
@@ -62,6 +78,34 @@
           "type": "file_contains",
           "passed": true,
           "detail": "matched=True path=scripts/codex-status.sh"
+        }
+      ]
+    },
+    {
+      "id": "M-11",
+      "type": "feature",
+      "priority": "P2",
+      "severity": null,
+      "title": "Layer2 file list cap no longer limits review scope",
+      "status": "passed",
+      "configured_status": "verified",
+      "iteration": "sprint-2026w06",
+      "owner": "autopilot",
+      "paths": [
+        "scripts/consume-review-trigger.sh"
+      ],
+      "checks": [
+        {
+          "id": "review-range-present",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/consume-review-trigger.sh"
+        },
+        {
+          "id": "full-scope-message",
+          "type": "file_contains",
+          "passed": true,
+          "detail": "matched=True path=scripts/consume-review-trigger.sh"
         }
       ]
     },

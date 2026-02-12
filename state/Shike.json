@@ -1,11 +1,11 @@
 {
-  "status": "absent",
-  "context_num": -1,
-  "head": "9dbb14a",
-  "commit_msg": "chore(api): enforce prisma sqlite/postgres schema parity",
-  "commit_time": 1770895346,
-  "commits_30m": 0,
+  "status": "idle_low_context",
+  "context_num": 15,
+  "head": "ce032ba",
+  "commit_msg": "fix(web): scope auth inflight cache by token and ignore stale responses",
+  "commit_time": 1770899444,
+  "commits_30m": 2,
   "working_no_commit": 0,
   "tokens_today": 0,
-  "last_check": 1770898211
+  "last_check": 1770899508
 }
