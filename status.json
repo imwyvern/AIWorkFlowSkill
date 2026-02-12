@@ -4,9 +4,9 @@
   "phases": {
     "dev": {
       "status": "in_progress",
-      "last_commit": "fea2e82b5abfeb32692cde0c30cf792de44895f3",
+      "last_commit": "b196153d7e02a1ae5c96b56c62d7900b7bab8514",
       "new_commits": 1,
-      "since_review": 35
+      "since_review": 36
     },
     "review": {
       "status": "in_progress",
@@ -25,20 +25,20 @@
     "prd": {
       "status": "verified",
       "last_result": "pass",
-      "last_verified_at": "2026-02-12T11:24:53Z"
+      "last_verified_at": "2026-02-12T11:27:18Z"
     }
   },
-  "updated_at": "2026-02-12T11:24:53Z",
+  "updated_at": "2026-02-12T11:32:19Z",
   "autopilot": {
-    "last_event": "prd_verify_pass",
-    "last_sync_at": "2026-02-12T11:24:53Z",
+    "last_event": "nudge_sent",
+    "last_sync_at": "2026-02-12T11:32:19Z",
     "last_window": "autopilot-dev",
-    "last_state": "working",
-    "last_head": "fea2e82b5abfeb32692cde0c30cf792de44895f3",
-    "last_since_review": 35,
+    "last_state": "idle",
+    "last_head": "b196153d7e02a1ae5c96b56c62d7900b7bab8514",
+    "last_since_review": 36,
     "last_new_commits": 1,
     "last_reason": "idle",
-    "nudge_count": 22,
+    "nudge_count": 23,
     "last_issues": "layer2: CLEAN range: git diff c3161cca7d68d1df08e58d8658b3a66319bf3ae8..HEAD --name-only --diff-filter=ACMR head: f824728a95e989c41cb11b97bec316a57a58c3a6 files_reviewed: 62 notes: monitor-all report now emphasizes lifecycle phase, review s"
   }
 }

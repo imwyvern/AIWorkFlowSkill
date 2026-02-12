@@ -2784,3 +2784,17 @@
 [2026-02-12 03:25:34] 📊 agent-simcity: state=idle
 [2026-02-12 03:25:34] 📊 replyher_android-2: state=idle
 [2026-02-12 03:25:34] 📊 autopilot-dev: state=idle
+[2026-02-12 03:27:17] 📝 autopilot-dev: new commit (+1, total since review: 36) — feat(iteration): review-until-clean loop with fast re-review and Telegram notifications
+[2026-02-12 03:27:18] ✅ autopilot-dev: PRD verify passed for b196153
+[2026-02-12 03:27:49] 📤 Shike: auto-nudged #1 (idle 301s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:27:49] ✅ Shike: idle nudge ack by working state
+[2026-02-12 03:30:13] [review-consumer] 🔓 reclaimed stale lock from pid 98313
+[2026-02-12 03:30:13] [review-consumer] 🔍 autopilot-dev: consuming incremental review trigger for /Users/wes/.autopilot
+[2026-02-12 03:30:13] [review-consumer] 📤 autopilot-dev: Layer 2 incremental review instruction sent to Codex
+[2026-02-12 03:30:45] 📊 Shike: state=idle
+[2026-02-12 03:30:45] 📊 agent-simcity: state=idle
+[2026-02-12 03:30:45] 📊 replyher_android-2: state=idle
+[2026-02-12 03:30:45] 📊 autopilot-dev: state=idle
+[2026-02-12 03:31:45] [review-consumer] ⏭ autopilot-dev: Layer 2 output missing/empty after 90s, keep trigger
+[2026-02-12 03:32:19] 📤 autopilot-dev: auto-nudged #1 (idle 302s) — 所有 PRD 任务已完成。运行测试确认无回归，然后等待新指令
+[2026-02-12 03:33:20] ⚠️ autopilot-dev: idle nudge no-ack in 60s (head/context unchanged)

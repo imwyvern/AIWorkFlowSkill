@@ -1,11 +1,11 @@
 {
   "status": "idle",
-  "context_num": 64,
-  "head": "5f03198",
-  "commit_msg": "fix(api): resolve layer2 P1/P2 parity, quota and session cache issues",
-  "commit_time": 1770895138,
-  "commits_30m": 1,
+  "context_num": 53,
+  "head": "9dbb14a",
+  "commit_msg": "chore(api): enforce prisma sqlite/postgres schema parity",
+  "commit_time": 1770895346,
+  "commits_30m": 2,
   "working_no_commit": 0,
   "tokens_today": 0,
-  "last_check": 1770895210
+  "last_check": 1770895812
 }

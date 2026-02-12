@@ -20,12 +20,22 @@ LOW_CONTEXT_THRESHOLD="${LOW_CONTEXT_THRESHOLD:-25}"
 WEEKLY_LIMIT_PCT=-1
 MANUAL_BLOCK_REASON=""
 
-format_status_suffix() {
-    local suffix=",\"weekly_limit_pct\":${WEEKLY_LIMIT_PCT:- -1}"
-    if [ -n "$MANUAL_BLOCK_REASON" ]; then
-        suffix="${suffix},\"manual_block_reason\":\"${MANUAL_BLOCK_REASON}\""
-    fi
-    echo "$suffix"
+emit_json() {
+    local status="$1" extra_args=()
+    shift
+    # Remaining args are --arg key value pairs
+    while [ $# -ge 2 ]; do
+        extra_args+=(--arg "$1" "$2")
+        shift 2
+    done
+    jq -n \
+      --arg status "$status" \
+      --arg context "$CONTEXT" \
+      --argjson context_num "$CONTEXT_NUM" \
+      --argjson weekly_limit_pct "$WEEKLY_LIMIT_PCT" \
+      --arg manual_block_reason "$MANUAL_BLOCK_REASON" \
+      "${extra_args[@]}" \
+      '{status:$status,context:$context,context_num:$context_num,weekly_limit_pct:$weekly_limit_pct,manual_block_reason:$manual_block_reason} + ($ARGS.named | del(.status,.context,.context_num,.weekly_limit_pct,.manual_block_reason) | to_entries | map({(.key):.value}) | add // {})' 2>/dev/null
 }
 
 # ---- 基础检查 ----
@@ -64,16 +74,14 @@ if [ -n "$WEEKLY_LIMIT_LINE" ]; then
         WEEKLY_LIMIT_PCT="$LIMIT_PCT"
     fi
 fi
-MANUAL_BLOCK_REASON=$(echo "$PANE" | grep -oEi 'BLOCKED[^│\n\r]*|manual[^│\n\r]*|人工[^│\n\r]*|certificate[^│\n\r]*' | head -1 | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | head -c 120 || true)
-MANUAL_BLOCK_REASON=${MANUAL_BLOCK_REASON//\"/\\\"}
-STATUS_SUFFIX=$(format_status_suffix)
+MANUAL_BLOCK_REASON=$(echo "$PANE" | grep -oEi 'BLOCKED[^│]*|manual[^│]*|人工[^│]*|certificate[^│]*' | head -1 | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | head -c 120 || true)
 
 # ============================================================
 # 检测 1: "esc to interrupt" — 100% 确定性工作中标志
 # ============================================================
 if echo "$PANE" | grep -qE "esc to interrupt"; then
     LAST_ACTIVITY=$(echo "$PANE" | grep -oE "• [A-Z][^ │(]*[^│(]*" | tail -1 | head -c 120 || echo "")
-    echo "{\"status\":\"working\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"last_activity\":\"$LAST_ACTIVITY\"${STATUS_SUFFIX}}"
+    emit_json "working" "last_activity" "$LAST_ACTIVITY"
     exit 0
 fi
 
@@ -91,21 +99,21 @@ ACTIVITY_LINES=$(echo "$PANE" | tail -15 | head -12)
 # 2a + 2b: 通用 + 不规则（容忍 Thinking... / 小写首字母 / 冒号等）
 if echo "$ACTIVITY_LINES" | grep -qiE "^  ?• (([A-Za-z][a-z]+(ing|ed|te|d|ote)([ :].*|[.]{3}|…|$))|(ran|wrote|read|set|got|put|did|built|sent|found|made|took)([ :].*|$))"; then
     LAST_ACTIVITY=$(echo "$ACTIVITY_LINES" | grep -oE "• [^│]{1,120}" | tail -1 | head -c 120 || echo "")
-    echo "{\"status\":\"working\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"last_activity\":\"$LAST_ACTIVITY\"${STATUS_SUFFIX}}"
+    emit_json "working" "last_activity" "$LAST_ACTIVITY"
     exit 0
 fi
 
 # 2c: 独立动词行 + 下一行有 └（容忍 Thinking...）
 if echo "$ACTIVITY_LINES" | grep -qiE "^  ?• [A-Za-z][a-z]+([.]{3}|…)?$" && echo "$ACTIVITY_LINES" | grep -qE "^ +└"; then
     LAST_ACTIVITY=$(echo "$ACTIVITY_LINES" | grep -oE "• [^│]{1,120}" | tail -1 | head -c 120 || echo "")
-    echo "{\"status\":\"working\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"last_activity\":\"$LAST_ACTIVITY\"${STATUS_SUFFIX}}"
+    emit_json "working" "last_activity" "$LAST_ACTIVITY"
     exit 0
 fi
 
 # 2d: 特殊短语
 if echo "$ACTIVITY_LINES" | grep -qE "^  ?• (Context compacted|Waiting for background|Compacting context)"; then
     LAST_ACTIVITY=$(echo "$ACTIVITY_LINES" | grep -oE "• (Context compacted|Waiting for background|Compacting context)" | tail -1 | head -c 120 || echo "")
-    echo "{\"status\":\"working\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"last_activity\":\"$LAST_ACTIVITY\"${STATUS_SUFFIX}}"
+    emit_json "working" "last_activity" "$LAST_ACTIVITY"
     exit 0
 fi
 
@@ -114,9 +122,9 @@ fi
 # ============================================================
 if echo "$ACTIVITY_LINES" | grep -qiE "Yes, proceed|Press +enter +to +confirm|don't ask again|Allow once|Allow always|Esc to cancel"; then
     if echo "$ACTIVITY_LINES" | grep -qiE "don't ask again|Allow always"; then
-        echo "{\"status\":\"permission_with_remember\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"detail\":\"can permanently allow\"${STATUS_SUFFIX}}"
+        emit_json "permission_with_remember" "detail" "can permanently allow"
     else
-        echo "{\"status\":\"permission\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"detail\":\"waiting for permission\"${STATUS_SUFFIX}}"
+        emit_json "permission" "detail" "waiting for permission"
     fi
     exit 1
 fi
@@ -128,9 +136,9 @@ PROMPT_LINE=$(echo "$PANE" | grep "^›" | tail -1 | head -c 120 || echo "")
 
 # context unknown 时不触发 compact（可能 TUI 还没渲染完），当普通 idle
 if [ "$CONTEXT_NUM" -ge 1 ] && [ "$CONTEXT_NUM" -le "$LOW_CONTEXT_THRESHOLD" ]; then
-    echo "{\"status\":\"idle_low_context\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"prompt\":\"$PROMPT_LINE\"${STATUS_SUFFIX}}"
+    emit_json "idle_low_context" "prompt" "$PROMPT_LINE"
     exit 1
 fi
 
-echo "{\"status\":\"idle\",\"context\":\"$CONTEXT\",\"context_num\":$CONTEXT_NUM,\"prompt\":\"$PROMPT_LINE\"${STATUS_SUFFIX}}"
+emit_json "idle" "prompt" "$PROMPT_LINE"
 exit 1

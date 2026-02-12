@@ -1,11 +1,11 @@
 {
   "status": "idle",
   "context_num": -1,
-  "head": "b8721be",
-  "commit_msg": "fix(review-r2): handle_idle accept idle_low_context, remove set -e from monitor-",
-  "commit_time": 1770894564,
-  "commits_30m": 2,
+  "head": "b196153",
+  "commit_msg": "feat(iteration): review-until-clean loop with fast re-review and Telegram notifi",
+  "commit_time": 1770895637,
+  "commits_30m": 5,
   "working_no_commit": 0,
   "tokens_today": 13194304,
-  "last_check": 1770895210
+  "last_check": 1770895812
 }

@@ -11,7 +11,8 @@
 #   shell                → resume --last，失败则新建 session
 #   absent               → 报错
 
-set -euo pipefail
+set -uo pipefail
+# NOTE: do NOT add set -e; codex-status.sh returns non-zero for idle/permission
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TMUX="/opt/homebrew/bin/tmux"
@@ -119,8 +120,14 @@ case "$STATUS" in
 
   shell)
     echo "🔄 $WINDOW: Codex 已退出，尝试 resume..."
-    # 策略：先尝试 resume --last（保留上下文），失败则新建
-    "$TMUX" send-keys -t "${SESSION}:${WINDOW}" "cd $PROJECT_DIR && $CODEX resume --last 2>/dev/null || $CODEX --full-auto" Enter
+    # 获取锁防止与 watchdog 并发 shell recovery
+    LOCK_D="${LOCK_DIR}/${SAFE_WINDOW}.lock.d"
+    if mkdir "$LOCK_D" 2>/dev/null; then
+      "$TMUX" send-keys -t "${SESSION}:${WINDOW}" "cd $PROJECT_DIR && $CODEX resume --last 2>/dev/null || $CODEX --full-auto" Enter
+      rm -rf "$LOCK_D"
+    else
+      echo "⏭ $WINDOW: shell recovery 已被 watchdog 处理"
+    fi
     echo "📝 最近 commit: $LAST_COMMIT"
     exit 0
     ;;
