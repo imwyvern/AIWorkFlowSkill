@@ -1,10 +1,11 @@
 {
-  "status": "working",
-  "context_num": 79,
-  "head": "9bf9fad",
-  "commit_msg": "fix(keyboard): harden 30mb memory guard reclaim throttling",
-  "commit_time": 1770830839,
+  "status": "absent",
+  "context_num": -1,
+  "head": "09be0fe",
+  "commit_msg": "fix: improve keyboard input experience",
+  "commit_time": 1770891915,
   "commits_30m": 0,
-  "working_no_commit": 3,
-  "last_check": 1770836414
+  "working_no_commit": 0,
+  "tokens_today": 13979636,
+  "last_check": 1770894012
 }

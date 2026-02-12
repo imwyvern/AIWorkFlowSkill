@@ -1,0 +1,103 @@
+{
+  "lastStatus": "skipped",
+  "error": "no changes",
+  "wakeMode": "now",
+  "generated_at": "2026-02-12T11:00:12Z",
+  "summary": [
+    "📊 monitor 2026-02-12 03:00 | progress 0/4 | working 0 idle 0 permission 0 shell 0 absent 4",
+    "🧠 daily tokens 2026-02-12: total 31.19M | input 31.08M | cached 27.07M | output 115.9k | reasoning 86.2k | top replyher_android-2 13.98M",
+    "✅ Shike: absent | phase dev | review in_progress | c30m 0 | tok/day 0 | perf(api): stream admin advice usage aggregation in batches",
+    "  🔨dev → 🔍review(2P0 5P1) → ⏳test → ⏳deploy",
+    "✅ agent-simcity: absent | phase dev | review pending | c30m 0 | tok/day 4.02M | fix: support 100% tip fee",
+    "  🔨dev → ⏳review → 🔧test(1bugs) → ⏳deploy",
+    "✅ replyher_android-2: absent | phase dev | review in_progress | c30m 0 | tok/day 13.98M | fix: improve keyboard input experience",
+    "  🔨dev → 🔍review(2P0 9P1) → 🔧test(2bugs) → ⏳deploy",
+    "✅ autopilot-dev: absent | phase dev | review in_progress | c30m 0 | tok/day 13.19M | feat: skip idle nudge when PRD complete",
+    "  🔨dev → 🔍review(0P0 0P1) → ⏳test → ⏳deploy"
+  ],
+  "report": {
+    "generated_at": "2026-02-12T11:00:12Z",
+    "generated_at_local": "2026-02-12 03:00",
+    "counts": {
+      "total_projects": 4,
+      "changed_projects": 0,
+      "working": 0,
+      "idle": 0,
+      "permission": 0,
+      "shell": 0,
+      "absent": 4
+    },
+    "daily_tokens": {
+      "date": "2026-02-12",
+      "timezone": "PST",
+      "totals": {
+        "input_tokens": 31075439,
+        "cached_input_tokens": 27074048,
+        "output_tokens": 115929,
+        "reasoning_output_tokens": 86208,
+        "total_tokens": 31191368
+      },
+      "projects": [
+        {
+          "window": "replyher_android-2",
+          "dir": "/Users/wes/replyher_android-2",
+          "input_tokens": 13933326,
+          "cached_input_tokens": 12426880,
+          "output_tokens": 46310,
+          "reasoning_output_tokens": 34048,
+          "total_tokens": 13979636,
+          "sessions": 1,
+          "last_event": "2026-02-12T10:25:23.413Z"
+        },
+        {
+          "window": "autopilot-dev",
+          "dir": "/Users/wes/.autopilot",
+          "input_tokens": 13133905,
+          "cached_input_tokens": 11422080,
+          "output_tokens": 60399,
+          "reasoning_output_tokens": 46336,
+          "total_tokens": 13194304,
+          "sessions": 1,
+          "last_event": "2026-02-12T10:24:30.426Z"
+        },
+        {
+          "window": "agent-simcity",
+          "dir": "/Users/wes/projects/agent-simcity",
+          "input_tokens": 4008208,
+          "cached_input_tokens": 3225088,
+          "output_tokens": 9220,
+          "reasoning_output_tokens": 5824,
+          "total_tokens": 4017428,
+          "sessions": 1,
+          "last_event": "2026-02-12T10:23:36.646Z"
+        },
+        {
+          "window": "Shike",
+          "dir": "/Users/wes/Shike",
+          "input_tokens": 0,
+          "cached_input_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_output_tokens": 0,
+          "total_tokens": 0,
+          "sessions": 0,
+          "last_event": null
+        }
+      ],
+      "top_project": {
+        "window": "replyher_android-2",
+        "total_tokens": 13979636
+      }
+    },
+    "lifecycle_phase_counts": {
+      "dev": 4
+    },
+    "review_status_counts": {
+      "in_progress": 3,
+      "pending": 1
+    },
+    "progress": {
+      "changed": 0,
+      "total": 4
+    }
+  }
+}

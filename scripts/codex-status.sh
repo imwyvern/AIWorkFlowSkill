@@ -57,7 +57,7 @@ if ! [[ "$CONTEXT_NUM" =~ ^[0-9]+$ ]]; then
     CONTEXT_NUM=-1
 fi
 
-WEEKLY_LIMIT_LINE=$(echo "$PANE" | grep -iE 'weekly limit' | head -1)
+WEEKLY_LIMIT_LINE=$(echo "$PANE" | grep -iE 'weekly limit' | head -1 || true)
 if [ -n "$WEEKLY_LIMIT_LINE" ]; then
     LIMIT_PCT=$(echo "$WEEKLY_LIMIT_LINE" | grep -oE '[0-9]{1,3}%' | head -1 | tr -d '%')
     if [[ "$LIMIT_PCT" =~ ^[0-9]+$ ]]; then

@@ -1,17 +1,20 @@
 {
   "project": ".autopilot",
-  "phase": "review",
+  "phase": "dev",
   "phases": {
     "dev": {
       "status": "in_progress",
-      "last_commit": "4e61883ac8fe81ddb666a84cbf10fa01f17561de",
+      "last_commit": "772ee2eb300da1bf62bfa409845288aa2025de94",
       "new_commits": 1,
-      "since_review": 25
+      "since_review": 31
     },
     "review": {
       "status": "in_progress",
       "round": 1,
-      "since_review": 25
+      "since_review": 25,
+      "issues": [
+        "layer2: CLEAN range: git diff c3161cca7d68d1df08e58d8658b3a66319bf3ae8..HEAD --name-only --diff-filter=ACMR head: f824728a95e989c41cb11b97bec316a57a58c3a6 files_reviewed: 62 notes: monitor-all report now emphasizes lifecycle phase, review s"
+      ]
     },
     "test": {
       "status": "pending"
@@ -22,19 +25,20 @@
     "prd": {
       "status": "verified",
       "last_result": "pass",
-      "last_verified_at": "2026-02-11T18:59:43Z"
+      "last_verified_at": "2026-02-12T10:24:32Z"
     }
   },
-  "updated_at": "2026-02-11T18:59:43Z",
+  "updated_at": "2026-02-12T10:24:32Z",
   "autopilot": {
-    "last_event": "review_triggered",
-    "last_sync_at": "2026-02-11T18:59:43Z",
+    "last_event": "prd_verify_pass",
+    "last_sync_at": "2026-02-12T10:24:32Z",
     "last_window": "autopilot-dev",
-    "last_state": "idle",
-    "last_head": "4e61883ac8fe81ddb666a84cbf10fa01f17561de",
-    "last_since_review": 25,
+    "last_state": "working",
+    "last_head": "772ee2eb300da1bf62bfa409845288aa2025de94",
+    "last_since_review": 31,
     "last_new_commits": 1,
     "last_reason": "idle",
-    "nudge_count": 6
+    "nudge_count": 20,
+    "last_issues": "layer2: CLEAN range: git diff c3161cca7d68d1df08e58d8658b3a66319bf3ae8..HEAD --name-only --diff-filter=ACMR head: f824728a95e989c41cb11b97bec316a57a58c3a6 files_reviewed: 62 notes: monitor-all report now emphasizes lifecycle phase, review s"
   }
 }

@@ -1,10 +1,11 @@
 {
-  "status": "working",
-  "context_num": 33,
-  "head": "089ef0c",
-  "commit_msg": "docs: update prd-todo with full PRD gap analysis + conventions",
-  "commit_time": 1770835472,
-  "commits_30m": 2,
-  "working_no_commit": 1,
-  "last_check": 1770836414
+  "status": "absent",
+  "context_num": -1,
+  "head": "853acc6",
+  "commit_msg": "perf(api): stream admin advice usage aggregation in batches",
+  "commit_time": 1770869212,
+  "commits_30m": 0,
+  "working_no_commit": 0,
+  "tokens_today": 0,
+  "last_check": 1770894011
 }

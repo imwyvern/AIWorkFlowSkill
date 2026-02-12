@@ -1,0 +1,38 @@
+[CHANGES]
+范围: git diff 4cd975798fc84ecb2d1ca3496687b4a8bfd70e9b..HEAD --name-only --diff-filter=ACMR（完整 179 文件）
+
+P1-1 数据模型漂移：SQLite / Postgres schema 不一致
+- 位置:
+  - apps/api/prisma/schema.prisma:29,32,91,96,262,317
+  - apps/api/prisma/schema.postgres.prisma:29
+- 现象:
+  - 主 schema 已新增 `MediaType.FLOOR_PLAN`、`PushProvider`、`PushPlatform`、`AgentPushDevice`、`Property.description`。
+  - `schema.postgres.prisma` 未同步这些定义。
+- 风险:
+  - Postgres 环境下迁移/生成客户端可能出现模型不一致，影响户型图、Push 设备与 description 功能。
+- 建议:
+  - 同步补齐 `schema.postgres.prisma` 并增加 schema parity 校验。
+
+P1-2 Free 版额度统计与软删除冲突
+- 位置:
+  - apps/api/src/modules/properties/properties.service.ts:334-335
+  - apps/api/src/modules/properties/properties.service.ts:528-541
+- 现象:
+  - `remove()` 已软删除（写 `attrs.__deletedAt`）。
+  - `create()` 免费额度仍按 `count({ where: { agentId } })` 统计，未排除软删除。
+- 风险:
+  - 用户删除后仍可能被拦截新建（`free plan property limit reached`）。
+- 建议:
+  - 额度计数排除软删除记录（推荐显式 `deletedAt` 字段；短期先过滤 `attrs.__deletedAt`）。
+  - 补充回归测试：软删除后可新建 + 真超限拦截。
+
+P2-1 会话缓存失效策略非 fail-safe
+- 位置:
+  - apps/api/src/common/auth/session-verifier.service.ts:64-67
+  - apps/api/src/common/auth/session-verifier.service.ts:167-173
+- 现象:
+  - Redis 命中直接信任缓存；`invalidateSession()` 删除共享缓存是 fire-and-forget。
+- 风险:
+  - 失效调用漏掉或删除失败时，撤销会话生效依赖 TTL 窗口（约 10s）。
+- 建议:
+  - 高敏感路径增加 DB 兜底/版本戳；至少对 `cache.del` 失败打告警。
