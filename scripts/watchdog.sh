@@ -61,6 +61,23 @@ normalize_int() {
     echo "${val:-0}"
 }
 
+count_prd_todo_remaining() {
+    local project_dir="$1"
+    local prd_todo="${project_dir}/prd-todo.md"
+    local remaining=0
+
+    if [ -f "$prd_todo" ]; then
+        remaining=$(grep '^- ' "$prd_todo" | grep -vic '✅\|⛔\|blocked\|done\|完成\|^- \\[x\\]\\|^- \\[X\\]' || true)
+        remaining=$(normalize_int "$remaining")
+    fi
+
+    echo "$remaining"
+}
+
+is_prd_todo_complete() {
+    [ "$(count_prd_todo_remaining "$1")" -eq 0 ]
+}
+
 # ---- 项目配置 ----
 # watchdog-projects.conf 格式: window:project_dir:nudge_message
 PROJECT_CONFIG_FILE="$HOME/.autopilot/watchdog-projects.conf"
@@ -453,6 +470,12 @@ handle_permission() {
 
 handle_idle() {
     local window="$1" safe="$2" project_dir="$3"
+
+    if is_prd_todo_complete "$project_dir"; then
+        log "✅ ${window}: PRD 100% complete, skipping idle nudge"
+        sync_project_status "$project_dir" "nudge_skipped_prd_complete" "window=${window}" "state=idle"
+        return
+    fi
 
     # 指数退避: nudge 次数越多，冷却越长 (300, 600, 1200, 2400, 4800, 9600)
     local nudge_count_file="${COOLDOWN_DIR}/nudge-count-${safe}"

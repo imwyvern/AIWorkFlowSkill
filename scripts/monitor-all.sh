@@ -77,6 +77,26 @@ if ! acquire_script_lock; then
 fi
 trap 'rm -rf "$MONITOR_LOCK" 2>/dev/null || true' EXIT
 
+REPORT_ONLY=false
+if [ -n "${MONITOR_REPORT_ONLY:-}" ]; then
+    case "${MONITOR_REPORT_ONLY,,}" in
+        1|true|yes)
+            REPORT_ONLY=true
+            ;;
+    esac
+fi
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --report-only)
+            REPORT_ONLY=true
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 # 项目配置（优先读取 watchdog-projects.conf）
 PROJECT_CONFIG_FILE="$HOME/.autopilot/watchdog-projects.conf"
 DEFAULT_PROJECTS=(
@@ -356,6 +376,20 @@ REPORT_JSON=$(jq -n \
   --argjson progress "$PROGRESS_JSON" \
   '{generated_at:$generated_at,generated_at_local:$generated_at_local,counts:{total_projects:$total_projects,changed_projects:$changed_projects,working:$working,idle:$idle,permission:$permission,shell:$shell,absent:$absent},daily_tokens:$daily_tokens,lifecycle_phase_counts:$lifecycle_phase_counts,review_status_counts:$review_status_counts,progress:$progress}')
 
+write_heartbeat_file() {
+    local status="$1"
+    local error="$2"
+    jq -n \
+      --arg lastStatus "$status" \
+      --arg error "$error" \
+      --arg wakeMode "now" \
+      --arg generated_at "$REPORT_TS_UTC" \
+      --argjson summary "$SUMMARY_JSON" \
+      --argjson report "$REPORT_JSON" \
+      '{lastStatus:$lastStatus,error:$error,wakeMode:$wakeMode,generated_at:$generated_at,summary:$summary,report:$report}' \
+      > "$HEARTBEAT_FILE"
+}
+
 # --- 保底心跳：如果超过 2 小时没有任何变化，强制输出一次全局状态 ---
 HEARTBEAT_FILE="$STATE_DIR/.last_report"
 FORCE_REPORT=false
@@ -368,16 +402,16 @@ fi
 
 # --- 输出 ---
 if [ ${#CHANGES[@]} -eq 0 ] && ! $FORCE_REPORT; then
+    write_heartbeat_file "skipped" "no changes"
     echo '{"changes":false}'
 elif [ ${#CHANGES[@]} -eq 0 ] && $FORCE_REPORT; then
-    touch "$HEARTBEAT_FILE"
+    write_heartbeat_file "ok" ""
     jq -n \
       --argjson summary "$SUMMARY_JSON" \
       --argjson daily_tokens "$TOKEN_SUMMARY_JSON" \
       --argjson report "$REPORT_JSON" \
       '{changes:true,heartbeat:true,projects:[],summary:$summary,daily_tokens:$daily_tokens,report:$report}'
 else
-    touch "$HEARTBEAT_FILE"
     PROJECTS_JSON=$(printf '%s\n' "${CHANGES[@]}" | jq -s .)
     
     # 计算总进度信息
@@ -388,6 +422,7 @@ else
         TOTAL_COMMITS=$((TOTAL_COMMITS + C))
     done
 
+    write_heartbeat_file "ok" ""
     jq -n \
       --argjson projects "$PROJECTS_JSON" \
       --argjson summary "$SUMMARY_JSON" \
@@ -398,6 +433,8 @@ else
 fi
 
 # Layer 2: 消费 watchdog 写的增量 review trigger 文件
-if [ -x "${SCRIPT_DIR}/consume-review-trigger.sh" ]; then
+if ! $REPORT_ONLY && [ -x "${SCRIPT_DIR}/consume-review-trigger.sh" ]; then
     "${SCRIPT_DIR}/consume-review-trigger.sh" >> "$HOME/.autopilot/logs/watchdog.log" 2>&1
+elif $REPORT_ONLY; then
+    >&2 echo "monitor-all: report-only mode active, skipping review trigger consumption"
 fi
