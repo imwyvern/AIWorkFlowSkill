@@ -1,81 +1,54 @@
 {
   "meta": {
-    "generated_at": "2026-02-12T13:53:45Z",
+    "generated_at": "2026-02-12T14:04:11Z",
     "project_dir": "/Users/wes/.autopilot",
     "items_file": "/Users/wes/.autopilot/prd-items.yaml",
     "version": "v1.0.0",
     "strict_mode": false,
-    "selected_count": 3,
-    "passed_count": 3,
+    "selected_count": 2,
+    "passed_count": 2,
     "failed_count": 0,
     "no_checks_count": 0,
     "changed_files_filter": [
-      ".gitignore",
       "AUTOPILOT-SKILLS-OPTIMIZATION.md",
-      "locks/watchdog-main.lock.d/pid",
-      "locks/watchdog-main.lock.d/start_sig",
-      "locks/watchdog-main.lock.d/started_at",
+      "SKILLS-OPTIMIZATION-CODEX-REVIEW.md",
       "logs/watchdog.log",
       "prd-progress.json",
-      "scripts/watchdog.sh",
       "state/.last_report",
       "state/Shike.json",
       "state/agent-simcity.json",
       "state/autopilot-dev.json",
+      "state/prd-snapshot-replyher_android-2.md5",
       "state/replyher_android-2.json",
+      "state/watchdog-activity/Shike",
       "state/watchdog-activity/autopilot-dev",
       "state/watchdog-activity/idle-probe-Shike",
       "state/watchdog-activity/idle-probe-agent-simcity",
       "state/watchdog-activity/idle-probe-autopilot-dev",
       "state/watchdog-activity/idle-probe-replyher_android-2",
+      "state/watchdog-activity/replyher_android-2",
+      "state/watchdog-commits/Shike-head",
+      "state/watchdog-commits/Shike-since-review",
       "state/watchdog-commits/autopilot-dev-head",
       "state/watchdog-commits/autopilot-dev-since-review",
+      "state/watchdog-commits/replyher_android-2-head",
+      "state/watchdog-commits/replyher_android-2-since-review",
+      "state/watchdog-cooldown/autocheck-Shike",
       "state/watchdog-cooldown/autocheck-autopilot-dev",
-      "state/watchdog-cooldown/nudge-count-replyher_android-2",
+      "state/watchdog-cooldown/autocheck-replyher_android-2",
+      "state/watchdog-cooldown/nudge-Shike",
+      "state/watchdog-cooldown/nudge-autopilot-dev",
+      "state/watchdog-cooldown/nudge-count-autopilot-dev",
       "state/watchdog-cooldown/nudge-replyher_android-2",
+      "state/watchdog-cooldown/prd-done-nudge-Shike",
+      "state/watchdog-cooldown/prd-done-nudge-agent-simcity",
+      "state/watchdog-cooldown/review-autopilot-dev",
       "status.json"
     ],
     "only_type": "all",
     "only_ids": []
   },
   "results": [
-    {
-      "id": "M-10",
-      "type": "feature",
-      "priority": "P2",
-      "severity": null,
-      "title": "Low-context threshold consistency",
-      "status": "passed",
-      "configured_status": "verified",
-      "iteration": "sprint-2026w06",
-      "owner": "autopilot",
-      "paths": [
-        "scripts/autopilot-constants.sh",
-        "scripts/watchdog.sh",
-        "scripts/codex-status.sh",
-        "scripts/monitor-all.sh"
-      ],
-      "checks": [
-        {
-          "id": "constants-threshold",
-          "type": "file_contains",
-          "passed": true,
-          "detail": "matched=True path=scripts/autopilot-constants.sh"
-        },
-        {
-          "id": "watchdog-threshold-link",
-          "type": "file_contains",
-          "passed": true,
-          "detail": "matched=True path=scripts/watchdog.sh"
-        },
-        {
-          "id": "codex-status-threshold-link",
-          "type": "file_contains",
-          "passed": true,
-          "detail": "matched=True path=scripts/codex-status.sh"
-        }
-      ]
-    },
     {
       "id": "M-12",
       "type": "feature",
