@@ -474,10 +474,17 @@ handle_permission() {
     # 二次检查
     local recheck
     recheck=$($TMUX capture-pane -t "${SESSION}:${window}" -p 2>/dev/null | tail -8)
-    if echo "$recheck" | grep -qF "Press enter to confirm or esc to cancel" && echo "$recheck" | grep -qF "(p)"; then
-        $TMUX send-keys -t "${SESSION}:${window}" "p" Enter
+    if echo "$recheck" | grep -qiE "Yes, proceed|Press +enter +to +confirm|Allow once|Allow always|Esc to cancel"; then
+        # 优先用 (p) permanently allow，其次 Enter 确认
+        if echo "$recheck" | grep -qF "(p)"; then
+            $TMUX send-keys -t "${SESSION}:${window}" "p" Enter
+        else
+            $TMUX send-keys -t "${SESSION}:${window}" Enter
+        fi
         set_cooldown "$key"
         log "✅ ${window}: auto-approved permission"
+    else
+        log "⚠️ ${window}: permission detected but recheck didn't match"
     fi
     release_lock "$safe"
 }
