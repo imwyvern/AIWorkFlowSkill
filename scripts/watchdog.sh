@@ -602,7 +602,12 @@ handle_idle() {
         local weekly_limit_pct
         weekly_limit_pct=$(extract_json_number "$before_status_json" "weekly_limit_pct")
         local weekly_limit_low=false
-        if [ "$weekly_limit_pct" -ge 0 ] && [ "$weekly_limit_pct" -lt 10 ]; then
+        local weekly_limit_exhausted=false
+        if [ "$weekly_limit_pct" -ge 0 ] && [ "$weekly_limit_pct" -lt 2 ]; then
+            weekly_limit_exhausted=true
+            weekly_limit_low=true
+            log "🔴 ${window}: weekly limit exhausted (${weekly_limit_pct}%) — switching to Claude AgentTeam"
+        elif [ "$weekly_limit_pct" -ge 0 ] && [ "$weekly_limit_pct" -lt 10 ]; then
             weekly_limit_low=true
             log "⚠️ ${window}: weekly limit low (${weekly_limit_pct}%) — will skip normal nudge (queue/compact still allowed)"
         fi
@@ -650,16 +655,27 @@ handle_idle() {
         local queue_task
         queue_task=$("${SCRIPT_DIR}/task-queue.sh" next "$safe" 2>/dev/null || true)
         if [ -n "$queue_task" ]; then
-            # 截断到合理长度
-            nudge_msg="${queue_task:0:280}"
-            if send_tmux_message "$window" "$nudge_msg" "queue task"; then
+            if [ "$weekly_limit_exhausted" = "true" ]; then
+                # Codex 额度耗尽 → 用 Claude AgentTeam 替代
                 "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
+                log "🤖 ${window}: Codex limit exhausted, dispatching to Claude AgentTeam"
+                ( "${SCRIPT_DIR}/claude-fallback.sh" "$safe" "$project_dir" "$queue_task" \
+                    >> "${HOME}/.autopilot/logs/claude-fallback.log" 2>&1 ) &
                 set_cooldown "$key"
-                echo 0 > "$nudge_count_file"  # 队列任务重置退避计数
-                log "📋 ${window}: queue task sent — ${nudge_msg:0:80}"
-                start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "queue task"
-                sync_project_status "$project_dir" "queue_task_sent" "window=${window}" "state=idle"
-                send_telegram "📋 ${window}: 开始处理队列任务 — ${nudge_msg:0:100}"
+                echo 0 > "$nudge_count_file"
+                sync_project_status "$project_dir" "claude_fallback" "window=${window}" "state=idle"
+            else
+                # 正常 Codex 派发
+                nudge_msg="${queue_task:0:280}"
+                if send_tmux_message "$window" "$nudge_msg" "queue task"; then
+                    "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
+                    set_cooldown "$key"
+                    echo 0 > "$nudge_count_file"  # 队列任务重置退避计数
+                    log "📋 ${window}: queue task sent — ${nudge_msg:0:80}"
+                    start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "queue task"
+                    sync_project_status "$project_dir" "queue_task_sent" "window=${window}" "state=idle"
+                    send_telegram "📋 ${window}: 开始处理队列任务 — ${nudge_msg:0:100}"
+                fi
             fi
             release_lock "$safe"
             return
@@ -667,8 +683,27 @@ handle_idle() {
 
         # weekly limit 低 → 跳过普通 nudge（queue/compact 已在上面处理）
         if [ "$weekly_limit_low" = "true" ]; then
-            log "⚠️ ${window}: weekly limit low (${weekly_limit_pct}%) — skipping normal nudge"
-            send_telegram_alert "$window" "weekly limit low (${weekly_limit_pct}%) — skipping normal nudge"
+            if [ "$weekly_limit_exhausted" = "true" ]; then
+                # 额度耗尽但还有 autocheck/prd issues → 用 Claude 修
+                local fallback_task=""
+                if [ -f "${STATE_DIR}/autocheck-issues-${safe}" ]; then
+                    fallback_task="修复以下自动检查问题: $(cat "${STATE_DIR}/autocheck-issues-${safe}" 2>/dev/null)"
+                    rm -f "${STATE_DIR}/autocheck-issues-${safe}"
+                elif [ -f "${STATE_DIR}/prd-issues-${safe}" ]; then
+                    fallback_task="修复PRD验证失败项: $(cat "${STATE_DIR}/prd-issues-${safe}" 2>/dev/null)"
+                    rm -f "${STATE_DIR}/prd-issues-${safe}"
+                fi
+                if [ -n "$fallback_task" ]; then
+                    log "🤖 ${window}: Codex exhausted + pending issues → Claude fallback"
+                    ( "${SCRIPT_DIR}/claude-fallback.sh" "$safe" "$project_dir" "$fallback_task" \
+                        >> "${HOME}/.autopilot/logs/claude-fallback.log" 2>&1 ) &
+                    set_cooldown "$key"
+                    sync_project_status "$project_dir" "claude_fallback" "window=${window}" "reason=issues"
+                fi
+            else
+                log "⚠️ ${window}: weekly limit low (${weekly_limit_pct}%) — skipping normal nudge"
+                send_telegram_alert "$window" "weekly limit low (${weekly_limit_pct}%) — skipping normal nudge"
+            fi
             sync_project_status "$project_dir" "nudge_skipped" "window=${window}" "state=idle" "reason=limit_low"
             release_lock "$safe"
             return
