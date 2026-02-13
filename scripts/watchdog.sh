@@ -601,12 +601,10 @@ handle_idle() {
 
         local weekly_limit_pct
         weekly_limit_pct=$(extract_json_number "$before_status_json" "weekly_limit_pct")
+        local weekly_limit_low=false
         if [ "$weekly_limit_pct" -ge 0 ] && [ "$weekly_limit_pct" -lt 10 ]; then
-            log "⚠️ ${window}: weekly limit low (${weekly_limit_pct}%) — deferring nudge"
-            send_telegram_alert "$window" "weekly limit low (${weekly_limit_pct}%) — hold off on idle nudges"
-            sync_project_status "$project_dir" "nudge_skipped" "window=${window}" "state=idle" "reason=limit_low"
-            release_lock "$safe"
-            return
+            weekly_limit_low=true
+            log "⚠️ ${window}: weekly limit low (${weekly_limit_pct}%) — will skip normal nudge (queue/compact still allowed)"
         fi
 
         # 优先级 1: post-compact 恢复协议（带上下文快照）
@@ -663,6 +661,15 @@ handle_idle() {
                 sync_project_status "$project_dir" "queue_task_sent" "window=${window}" "state=idle"
                 send_telegram "📋 ${window}: 开始处理队列任务 — ${nudge_msg:0:100}"
             fi
+            release_lock "$safe"
+            return
+        fi
+
+        # weekly limit 低 → 跳过普通 nudge（queue/compact 已在上面处理）
+        if [ "$weekly_limit_low" = "true" ]; then
+            log "⚠️ ${window}: weekly limit low (${weekly_limit_pct}%) — skipping normal nudge"
+            send_telegram_alert "$window" "weekly limit low (${weekly_limit_pct}%) — skipping normal nudge"
+            sync_project_status "$project_dir" "nudge_skipped" "window=${window}" "state=idle" "reason=limit_low"
             release_lock "$safe"
             return
         fi
