@@ -24,6 +24,7 @@ TMUX="/opt/homebrew/bin/tmux"
 CODEX="/opt/homebrew/bin/codex"
 SESSION="autopilot"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/autopilot-lib.sh"
 if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
     # shellcheck disable=SC1091
     source "${SCRIPT_DIR}/autopilot-constants.sh"
@@ -53,13 +54,6 @@ REVIEW_COOLDOWN=7200       # 增量 review 冷却（秒）= 2 小时
 COMMITS_FOR_REVIEW=15      # 触发增量 review 的 commit 数
 FEAT_WITHOUT_TEST_LIMIT=5  # 连续 feat 无 test 触发写测试 nudge
 mkdir -p "$(dirname "$LOG")" "$LOCK_DIR" "$COOLDOWN_DIR" "$ACTIVITY_DIR" "$COMMIT_COUNT_DIR"
-
-# 数字清洗：去除换行/空格，只保留数字
-normalize_int() {
-    local val
-    val=$(echo "$1" | tr -dc '0-9')
-    echo "${val:-0}"
-}
 
 count_prd_todo_remaining() {
     local project_dir="$1"
@@ -121,10 +115,6 @@ PROJECTS=()
 # ---- 工具函数 ----
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"
-}
-
-sanitize() {
-    echo "$1" | tr -cd 'a-zA-Z0-9_-'
 }
 
 hash_text() {
@@ -253,14 +243,7 @@ extract_json_number() {
 
 send_telegram_alert() {
     local window="$1" text="$2"
-    local tg_token tg_chat config_file
-    config_file="$HOME/.autopilot/config.yaml"
-    tg_token=$(grep '^bot_token' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
-    tg_chat=$(grep '^chat_id' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
-    if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
-        curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
-            -d chat_id="$tg_chat" -d text="🚨 ${window}: ${text}" >/dev/null 2>&1 &
-    fi
+    send_telegram "🚨 ${window}: ${text}"
 }
 
 start_nudge_ack_check() {
@@ -327,39 +310,6 @@ sync_project_status() {
     fi
 }
 
-# macOS 兼容 timeout（优先 gtimeout，fallback 无超时）
-TIMEOUT_CMD=""
-if command -v timeout >/dev/null 2>&1; then
-    TIMEOUT_CMD="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
-    TIMEOUT_CMD="gtimeout"
-fi
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if [ -n "$TIMEOUT_CMD" ]; then
-        "$TIMEOUT_CMD" "$secs" "$@"
-    else
-        # Fallback: bash background + kill after timeout
-        "$@" &
-        local pid=$!
-        (
-            sleep "$secs"
-            kill "$pid" 2>/dev/null
-        ) &
-        local watcher=$!
-        wait "$pid" 2>/dev/null
-        local rc=$?
-        kill "$watcher" 2>/dev/null || true
-        wait "$watcher" 2>/dev/null || true
-        return "$rc"
-    fi
-}
-
-now_ts() {
-    date +%s
-}
-
 pid_start_signature() {
     local pid="$1"
     LC_ALL=C ps -p "$pid" -o lstart= 2>/dev/null | awk '{$1=$1; print}'
@@ -394,25 +344,6 @@ rotate_log() {
     # 清理过期冷却/活动文件
     find "$COOLDOWN_DIR" -type f -mtime +1 -delete 2>/dev/null
     find "$ACTIVITY_DIR" -type f -mtime +1 -delete 2>/dev/null
-}
-
-# 原子锁（macOS 没有 flock，用 mkdir 替代）
-acquire_lock() {
-    local lock="${LOCK_DIR}/$1.lock.d"
-    mkdir "$lock" 2>/dev/null && return 0
-    # 检查是否是过期锁（>60s，说明持有者崩溃了）
-    if [ -d "$lock" ]; then
-        local lock_age=$(( $(now_ts) - $(stat -f %m "$lock" 2>/dev/null || echo 0) ))
-        if [ "$lock_age" -gt 60 ]; then
-            rm -rf "$lock" 2>/dev/null
-            mkdir "$lock" 2>/dev/null && return 0
-        fi
-    fi
-    return 1
-}
-
-release_lock() {
-    rm -rf "${LOCK_DIR}/$1.lock.d" 2>/dev/null
 }
 
 # 冷却机制：检查某个 action 是否在冷却中
@@ -501,6 +432,33 @@ detect_state() {
         fi
     elif [ "$ctx_num" -ge 0 ] && [ "$ctx_num" -le "$LOW_CONTEXT_THRESHOLD" ]; then
         touch "${STATE_DIR}/was-low-context-${safe}"
+    fi
+
+    # Fix 5: compact 失败检测
+    local compact_ts_file="${STATE_DIR}/compact-sent-ts-${safe}"
+    if [ -f "$compact_ts_file" ] && [ "$ctx_num" -ge 0 ] && [ "$ctx_num" -le "$LOW_CONTEXT_THRESHOLD" ]; then
+        local compact_sent_ts compact_elapsed compact_fail_file compact_fail_count
+        compact_sent_ts=$(cat "$compact_ts_file" 2>/dev/null || echo 0)
+        compact_sent_ts=$(normalize_int "$compact_sent_ts")
+        compact_elapsed=$(( $(now_ts) - compact_sent_ts ))
+        if [ "$compact_elapsed" -ge 180 ]; then
+            # 3 分钟后 context 仍低 → compact 失败
+            compact_fail_file="${STATE_DIR}/compact-fail-count-${safe}"
+            compact_fail_count=$(cat "$compact_fail_file" 2>/dev/null || echo 0)
+            compact_fail_count=$(normalize_int "$compact_fail_count")
+            compact_fail_count=$((compact_fail_count + 1))
+            echo "$compact_fail_count" > "$compact_fail_file"
+            rm -f "$compact_ts_file"
+            log "⚠️ ${window}: compact failure #${compact_fail_count} (context still ${ctx_num}% after ${compact_elapsed}s)"
+            if [ "$compact_fail_count" -ge 3 ]; then
+                send_telegram_alert "$window" "compact 连续 ${compact_fail_count} 次失败，context 仍 ${ctx_num}%"
+                echo 0 > "$compact_fail_file"
+            fi
+        fi
+    elif [ -f "$compact_ts_file" ] && [ "$ctx_num" -gt "$LOW_CONTEXT_THRESHOLD" ]; then
+        # compact 成功，重置计数
+        rm -f "$compact_ts_file"
+        echo 0 > "${STATE_DIR}/compact-fail-count-${safe}" 2>/dev/null || true
     fi
 
     echo "$state"
@@ -594,13 +552,7 @@ handle_idle() {
             if ! [ -f "$alert_file" ]; then
                 touch "$alert_file"
                 log "🚨 ${window}: stalled after ${nudge_count} nudges, stopping auto-nudge"
-                local tg_token tg_chat
-                tg_token=$(grep '^bot_token' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
-                tg_chat=$(grep '^chat_id' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"')
-                if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
-                    curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
-                        -d chat_id="$tg_chat" -d text="🚨 ${window} 已 nudge ${nudge_count} 次无响应，自动 nudge 已停止。请手动检查。" >/dev/null 2>&1 &
-                fi
+                send_telegram "🚨 ${window} 已 nudge ${nudge_count} 次无响应，自动 nudge 已停止。请手动检查。"
             fi
             return
         fi
@@ -709,14 +661,7 @@ handle_idle() {
                 log "📋 ${window}: queue task sent — ${nudge_msg:0:80}"
                 start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "queue task"
                 sync_project_status "$project_dir" "queue_task_sent" "window=${window}" "state=idle"
-                # 通知 Telegram
-                local tg_token tg_chat
-                tg_token=$(grep '^bot_token' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
-                tg_chat=$(grep '^chat_id' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
-                if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
-                    curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
-                        -d chat_id="$tg_chat" --data-urlencode "text=📋 ${window}: 开始处理队列任务 — ${nudge_msg:0:100}" >/dev/null 2>&1 &
-                fi
+                send_telegram "📋 ${window}: 开始处理队列任务 — ${nudge_msg:0:100}"
             fi
             release_lock "$safe"
             return
@@ -815,6 +760,8 @@ handle_low_context() {
 
         if send_tmux_message "$window" "/compact" "compact"; then
             set_cooldown "$key"
+            # Fix 5: 记录 compact 发送时间
+            now_ts > "${STATE_DIR}/compact-sent-ts-${safe}"
             log "🗜 ${window}: sent /compact"
             sync_project_status "$project_dir" "compact_sent" "window=${window}" "state=idle_low_context"
         fi
@@ -872,6 +819,8 @@ check_new_commits() {
     # 重置 nudge 退避计数 + 清除 stalled 告警
     echo 0 > "${COOLDOWN_DIR}/nudge-count-${safe}"
     rm -f "${STATE_DIR}/alert-stalled-${safe}"
+    # Fix 4: 新 commit 重置 review 重试计数
+    rm -f "${STATE_DIR}/review-retry-count-${safe}" "${STATE_DIR}/review-failed-${safe}"
 
     # 增加 commit 计数
     local count
@@ -904,15 +853,9 @@ check_new_commits() {
             log "📋 ${window}: ${remaining} more tasks in queue"
         fi
         # Telegram 通知完成
-        local tg_token tg_chat
-        tg_token=$(grep '^bot_token' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
-        tg_chat=$(grep '^chat_id' "$HOME/.autopilot/config.yaml" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
-        if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
-            local done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
-            [ "$remaining" -gt 0 ] && done_msg="${done_msg}\n📋 还剩 ${remaining} 个任务待处理"
-            curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
-                -d chat_id="$tg_chat" --data-urlencode "text=${done_msg}" >/dev/null 2>&1 &
-        fi
+        local done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
+        [ "$remaining" -gt 0 ] && done_msg="${done_msg}\n📋 还剩 ${remaining} 个任务待处理"
+        send_telegram "$done_msg"
     fi
 
     # Layer 1 自动检查
@@ -1275,10 +1218,47 @@ while true; do
             fi
         fi
 
+        # Fix 6: 非 working 状态清除僵死追踪
+        if [ "$state" != "working" ]; then
+            rm -f "${STATE_DIR}/working-since-${safe}" "${STATE_DIR}/working-head-${safe}" "${STATE_DIR}/working-ctx-${safe}" "${STATE_DIR}/stall-alerted-${safe}" 2>/dev/null || true
+        fi
+
         case "$state" in
             working)
                 update_activity "$safe"
                 reset_idle_probe "$safe"
+                # Fix 6: TUI 僵死检测
+                stall_head=$(cat "${COMMIT_COUNT_DIR}/${safe}-head" 2>/dev/null || echo "none")
+                stall_json=$(get_window_status_json "$window")
+                stall_ctx=$(extract_context_num_field "$stall_json")
+                working_since_f="${STATE_DIR}/working-since-${safe}"
+                working_head_f="${STATE_DIR}/working-head-${safe}"
+                working_ctx_f="${STATE_DIR}/working-ctx-${safe}"
+                prev_stall_head=$(cat "$working_head_f" 2>/dev/null || echo "")
+                prev_stall_ctx=$(cat "$working_ctx_f" 2>/dev/null || echo "")
+                if [ "$stall_head" != "$prev_stall_head" ] || [ "$stall_ctx" != "$prev_stall_ctx" ]; then
+                    # HEAD 或 context 变化 → 重置追踪
+                    now_ts > "$working_since_f"
+                    echo "$stall_head" > "$working_head_f"
+                    echo "$stall_ctx" > "$working_ctx_f"
+                    rm -f "${STATE_DIR}/stall-alerted-${safe}"
+                else
+                    # 没变化 → 检查持续时间
+                    working_since_val=$(cat "$working_since_f" 2>/dev/null || echo 0)
+                    working_since_val=$(normalize_int "$working_since_val")
+                    stall_dur=$(( $(now_ts) - working_since_val ))
+                    if [ "$stall_dur" -ge 1800 ]; then
+                        # 30 分钟 → Telegram 告警
+                        if [ ! -f "${STATE_DIR}/stall-alerted-${safe}" ]; then
+                            send_telegram_alert "$window" "TUI 可能僵死（working ${stall_dur}s 但 HEAD 和 context 无变化）"
+                            touch "${STATE_DIR}/stall-alerted-${safe}"
+                            log "🚨 ${window}: possible TUI stall (${stall_dur}s, HEAD=${stall_head:0:7}, ctx=${stall_ctx}%)"
+                        fi
+                    elif [ "$stall_dur" -ge 900 ]; then
+                        # 15 分钟 → 日志 warn
+                        log "⚠️ ${window}: working ${stall_dur}s with no HEAD/context change (HEAD=${stall_head:0:7}, ctx=${stall_ctx}%)"
+                    fi
+                fi
                 ;;
             permission|permission_with_remember)
                 reset_idle_probe "$safe"

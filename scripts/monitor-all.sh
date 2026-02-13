@@ -21,6 +21,7 @@ set -uo pipefail
 # and many grep/jq commands may legitimately return non-zero.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/autopilot-lib.sh"
 if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
     # shellcheck disable=SC1091
     source "${SCRIPT_DIR}/autopilot-constants.sh"
@@ -34,12 +35,6 @@ MONITOR_LOCK="${LOCK_DIR}/monitor-all.lock.d"
 mkdir -p "$STATE_DIR" "$LOCK_DIR"
 
 TMUX="/opt/homebrew/bin/tmux"
-
-normalize_int() {
-    local val
-    val=$(echo "${1:-}" | tr -dc '0-9')
-    echo "${val:-0}"
-}
 
 format_token_count() {
     local n

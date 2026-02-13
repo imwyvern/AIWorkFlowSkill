@@ -15,6 +15,7 @@ set -uo pipefail
 # NOTE: do NOT add set -e; codex-status.sh returns non-zero for idle/permission
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/autopilot-lib.sh"
 TMUX="/opt/homebrew/bin/tmux"
 CODEX="/opt/homebrew/bin/codex"
 SESSION="autopilot"
@@ -94,6 +95,25 @@ case "$STATUS" in
 
   idle)
     rm -f "$COMPACT_FLAG"
+    # Fix 2: 读取 watchdog 退避状态，同步退避
+    if [ -f "${STATE_DIR}/alert-stalled-${SAFE_WINDOW}" ]; then
+        echo "⏭ $WINDOW: watchdog 已标记 stalled，跳过 nudge"
+        exit 0
+    fi
+    WD_NUDGE_COUNT_FILE="${COOLDOWN_DIR}/nudge-count-${SAFE_WINDOW}"
+    WD_NUDGE_COUNT=$(cat "$WD_NUDGE_COUNT_FILE" 2>/dev/null || echo 0)
+    WD_NUDGE_COUNT=$(normalize_int "$WD_NUDGE_COUNT")
+    WD_EXP=$((WD_NUDGE_COUNT > 5 ? 5 : WD_NUDGE_COUNT))
+    WD_EFFECTIVE_COOLDOWN=$((300 * (1 << WD_EXP)))
+    WD_LAST_NUDGE_FILE="${COOLDOWN_DIR}/nudge-${SAFE_WINDOW}"
+    if [ -f "$WD_LAST_NUDGE_FILE" ]; then
+        WD_LAST_NUDGE=$(cat "$WD_LAST_NUDGE_FILE" 2>/dev/null || echo 0)
+        WD_ELAPSED=$(($(date +%s) - $(normalize_int "$WD_LAST_NUDGE")))
+        if [ "$WD_ELAPSED" -lt "$WD_EFFECTIVE_COOLDOWN" ]; then
+            echo "⏭ $WINDOW: watchdog 退避中 (${WD_ELAPSED}s/${WD_EFFECTIVE_COOLDOWN}s)，跳过 nudge"
+            exit 0
+        fi
+    fi
     echo "⚠️ $WINDOW: 空转 ($CONTEXT)，发送 nudge..."
     "$SCRIPT_DIR/tmux-send.sh" "$WINDOW" "$NUDGE"
     echo "📤 已发送: $NUDGE"

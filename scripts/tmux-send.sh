@@ -13,6 +13,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/autopilot-lib.sh"
+
 TMUX="/opt/homebrew/bin/tmux"
 SESSION="autopilot"
 WINDOW="${1:?用法: tmux-send.sh <window> <message>}"
@@ -25,20 +28,10 @@ mkdir -p "$LOCK_DIR" "$STATE_DIR"
 MAX_DIRECT=300          # send-keys -l 直发上限（中文 ~100 字）
 MAX_CHUNKED=800         # 分块 send-keys 上限
 CHUNK_SIZE=100          # 每块字符数
-CHUNK_DELAY=0.05        # 块间延迟（秒）
+CHUNK_DELAY=0.2         # 块间延迟（秒）— 200ms 防 TUI 乱码
 VERIFY_WAIT=0.5         # 发送后等待验证的时间（秒）
 VERIFY_PREFIX_LEN=20    # 验证时取消息前 N 字符匹配
 MAX_RETRIES=2           # 最大重试次数（含降级）
-
-sanitize() {
-    echo "$1" | tr -cd 'a-zA-Z0-9_-'
-}
-
-normalize_int() {
-    local val
-    val=$(echo "${1:-}" | tr -dc '0-9')
-    echo "${val:-0}"
-}
 
 log() {
     echo "[tmux-send $(date '+%H:%M:%S')] $*" >&2
@@ -54,17 +47,19 @@ acquire_send_lock() {
         return 0
     fi
 
-    local existing_pid
-    existing_pid=$(cat "${SEND_LOCK}/pid" 2>/dev/null || echo 0)
-    existing_pid=$(normalize_int "$existing_pid")
-    if [ "$existing_pid" -gt 0 ] && kill -0 "$existing_pid" 2>/dev/null; then
-        return 1
+    # 10s 超时自动过期（防死锁）
+    local lock_age=0
+    if [ -d "$SEND_LOCK" ]; then
+        lock_age=$(( $(date +%s) - $(stat -f %m "$SEND_LOCK" 2>/dev/null || echo 0) ))
+    fi
+    if [ "$lock_age" -gt 10 ]; then
+        rm -rf "$SEND_LOCK" 2>/dev/null || true
+        mkdir "$SEND_LOCK" 2>/dev/null || return 1
+        echo "$$" > "${SEND_LOCK}/pid"
+        return 0
     fi
 
-    rm -rf "$SEND_LOCK" 2>/dev/null || true
-    mkdir "$SEND_LOCK" 2>/dev/null || return 1
-    echo "$$" > "${SEND_LOCK}/pid"
-    return 0
+    return 1
 }
 
 if ! acquire_send_lock; then
@@ -206,9 +201,8 @@ safe_retry() {
         send_success=true
         return 0
     fi
-    # Codex 确实还在 idle，清除残留并重试
+    # Codex 确实还在 idle，准备重试（不发 C-u，ink TUI 不支持）
     log "Level ${level} 验证失败且 Codex 仍 idle，准备重试"
-    "$TMUX" send-keys -t "${SESSION}:${WINDOW}" C-u
     sleep 0.3
     return 1  # 需要重试
 }
