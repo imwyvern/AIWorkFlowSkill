@@ -129,7 +129,7 @@ verify_message_received() {
         
         # 检查 3: prompt 变化（新的 › 行不包含旧消息 = 消息已被处理完毕）
         # 这种情况是快速处理完成
-        if echo "$pane_content" | grep -qE '^\s*›' | grep -qvF "$prefix" 2>/dev/null; then
+        if echo "$pane_content" | grep -E '^\s*›' | grep -qvF "$prefix" 2>/dev/null; then
             return 0
         fi
     done
