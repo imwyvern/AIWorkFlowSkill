@@ -603,7 +603,7 @@ handle_idle() {
         weekly_limit_pct=$(extract_json_number "$before_status_json" "weekly_limit_pct")
         local weekly_limit_low=false
         local weekly_limit_exhausted=false
-        if [ "$weekly_limit_pct" -ge 0 ] && [ "$weekly_limit_pct" -lt 2 ]; then
+        if [ "$weekly_limit_pct" -ge 0 ] && [ "$weekly_limit_pct" -le 2 ]; then
             weekly_limit_exhausted=true
             weekly_limit_low=true
             log "🔴 ${window}: weekly limit exhausted (${weekly_limit_pct}%) — switching to Claude AgentTeam"
