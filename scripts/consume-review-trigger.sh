@@ -7,6 +7,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)}"
+source "${SCRIPT_DIR}/autopilot-lib.sh"
 if [ -f "${SCRIPT_DIR}/autopilot-constants.sh" ]; then
     # shellcheck disable=SC1091
     source "${SCRIPT_DIR}/autopilot-constants.sh"
@@ -17,17 +18,7 @@ TSC_TIMEOUT_SECONDS="${TSC_TIMEOUT_SECONDS:-30}"
 REVIEW_OUTPUT_WAIT_SECONDS="${REVIEW_OUTPUT_WAIT_SECONDS:-90}"
 REVIEW_TRIGGER_STALE_SECONDS="${REVIEW_TRIGGER_STALE_SECONDS:-7200}"
 COOLDOWN_DIR="${STATE_DIR:-$HOME/.autopilot/state}/watchdog-cooldown"
-
-# 数字清洗
-normalize_int() {
-    local val
-    val=$(echo "$1" | tr -dc '0-9')
-    echo "${val:-0}"
-}
-
-sanitize() {
-    echo "$1" | tr -cd 'a-zA-Z0-9_-'
-}
+MAX_REVIEW_RETRIES=3
 
 resolve_window_from_safe() {
     local safe="$1"
@@ -63,37 +54,8 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [review-consumer] $*" >> "$LOG"
 }
 
-now_ts() {
-    date +%s
-}
-
 notify_review_result() {
-    local tg_token tg_chat config_file msg
-    config_file="$HOME/.autopilot/config.yaml"
-    tg_token=$(grep '^bot_token' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
-    tg_chat=$(grep '^chat_id' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"')
-    msg="$1"
-    if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
-        curl -s -X POST "https://api.telegram.org/bot${tg_token}/sendMessage" \
-            -d chat_id="$tg_chat" -d text="$msg" >/dev/null 2>&1 &
-    fi
-}
-
-TIMEOUT_CMD=""
-if command -v timeout >/dev/null 2>&1; then
-    TIMEOUT_CMD="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
-    TIMEOUT_CMD="gtimeout"
-fi
-
-run_with_timeout() {
-    local secs="$1"
-    shift
-    if [ -n "$TIMEOUT_CMD" ]; then
-        "$TIMEOUT_CMD" "$secs" "$@"
-    else
-        "$@"
-    fi
+    send_telegram "$1"
 }
 
 is_codex_idle() {
@@ -256,6 +218,24 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         continue
     fi
 
+    # Fix 4: review 最大重试检查
+    review_retry_file="${STATE_DIR}/review-retry-count-${safe}"
+    review_failed_file="${STATE_DIR}/review-failed-${safe}"
+    if [ -f "$review_failed_file" ]; then
+        log "⏭ ${safe}: review permanently failed, skip (delete ${review_failed_file} to retry)"
+        rm -f "$trigger_file"
+        continue
+    fi
+    review_retry_count=$(cat "$review_retry_file" 2>/dev/null || echo 0)
+    review_retry_count=$(normalize_int "$review_retry_count")
+    if [ "$review_retry_count" -ge "$MAX_REVIEW_RETRIES" ]; then
+        touch "$review_failed_file"
+        send_telegram "🚨 ${window}: review 连续 ${review_retry_count} 次未完成，已停止自动 review。手动检查后删除 ${review_failed_file} 重新启用。"
+        log "🚨 ${safe}: review exceeded max retries (${review_retry_count}), marking failed"
+        rm -f "$trigger_file"
+        continue
+    fi
+
     # Layer 1: 快速自动扫描
     local_issues=""
 
@@ -317,7 +297,9 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         rm -f "$review_output_file"
         if "${SCRIPT_DIR}/tmux-send.sh" "$window" "$review_msg" >/dev/null 2>&1; then
             touch "$in_progress_file"
-            log "📤 ${safe}: Layer 2 incremental review instruction sent to Codex"
+            # Fix 4: 递增重试计数
+            echo $((review_retry_count + 1)) > "$review_retry_file"
+            log "📤 ${safe}: Layer 2 incremental review instruction sent to Codex (attempt $((review_retry_count + 1))/${MAX_REVIEW_RETRIES})"
         else
             log "⏭ ${safe}: failed to send Layer 2 instruction, keep trigger"
             continue
@@ -355,6 +337,8 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         # 有问题时写 issues 文件供 watchdog nudge 修复，不重置计数
         echo "$combined_issues" > "${STATE_DIR}/autocheck-issues-${safe}.tmp" && mv -f "${STATE_DIR}/autocheck-issues-${safe}.tmp" "${STATE_DIR}/autocheck-issues-${safe}"
         log "⚠️ ${safe}: issues written for watchdog nudge, counters NOT reset"
+        # Fix 4: review 完成（有问题但完成了），重置重试计数
+        rm -f "${STATE_DIR}/review-retry-count-${safe}" "${STATE_DIR}/review-failed-${safe}"
         # 重置 commit 计数为 0（fix 后的新 commit 重新累积，达到阈值后自动 re-review）
         echo 0 > "${COMMIT_COUNT_DIR}/${safe}-since-review"
         now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
@@ -368,6 +352,8 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         echo 0 > "${COMMIT_COUNT_DIR}/${safe}-since-review"
         now_ts > "${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
         rm -f "${STATE_DIR}/autocheck-issues-${safe}"
+        # Fix 4: review 成功，重置重试计数
+        rm -f "${STATE_DIR}/review-retry-count-${safe}" "${STATE_DIR}/review-failed-${safe}"
         # Review CLEAN → reset nudge backoff (Codex proved responsive)
         echo 0 > "${COOLDOWN_DIR}/nudge-count-${safe}" 2>/dev/null || true
         rm -f "${STATE_DIR}/alert-stalled-${safe}" 2>/dev/null || true
