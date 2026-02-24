@@ -41,6 +41,14 @@ SAFE_WINDOW="$(sanitize "$WINDOW")"
 [ -n "$SAFE_WINDOW" ] || SAFE_WINDOW="window"
 SEND_LOCK="${LOCK_DIR}/tmux-send-${SAFE_WINDOW}.lock.d"
 
+build_buffer_name() {
+    local ts_ns
+    ts_ns=$(date +%s%N 2>/dev/null || date +%s)
+    ts_ns=$(echo "$ts_ns" | tr -dc '0-9')
+    [ -n "$ts_ns" ] || ts_ns=$(date +%s)
+    echo "autopilot-msg-${SAFE_WINDOW}-$$-${ts_ns}-${RANDOM}"
+}
+
 acquire_send_lock() {
     if mkdir "$SEND_LOCK" 2>/dev/null; then
         echo "$$" > "${SEND_LOCK}/pid"
@@ -172,7 +180,7 @@ send_paste_buffer() {
     TMPFILE=$(mktemp /tmp/tmux-paste.XXXXXX)
     printf '%s' "$SINGLE_LINE" > "$TMPFILE"
     
-    BUFFER_NAME="autopilot-msg-${SAFE_WINDOW}-$$-$(date +%s)-${RANDOM}"
+    BUFFER_NAME=$(build_buffer_name)
     "$TMUX" load-buffer -b "$BUFFER_NAME" "$TMPFILE"
     
     # -p = bracketed paste mode (发送 \e[200~ ... \e[201~ 序列)
@@ -217,8 +225,7 @@ if [ "$MSG_LEN" -le "$MAX_DIRECT" ]; then
         if verify_message_received; then
             send_success=true
         else
-            safe_retry 2 || true
-            send_success=true  # 已发两次，大概率成功
+            safe_retry 2 && send_success=true
         fi
     fi
 
@@ -232,8 +239,7 @@ elif [ "$MSG_LEN" -le "$MAX_CHUNKED" ]; then
         if verify_message_received; then
             send_success=true
         else
-            safe_retry 3 || true
-            send_success=true
+            safe_retry 3 && send_success=true
         fi
     fi
 
@@ -248,7 +254,11 @@ else
         SINGLE_LINE="${SINGLE_LINE:0:$MAX_CHUNKED}"
         MSG_LEN=${#SINGLE_LINE}
         send_chunked
-        verify_message_received && send_success=true || send_success=true
+        if verify_message_received; then
+            send_success=true
+        else
+            safe_retry 4 && send_success=true
+        fi
     fi
 fi
 
@@ -259,10 +269,7 @@ if $send_success; then
     date +%s > "${STATE_DIR}/manual-task-${SAFE_WINDOW}"
     exit 0
 else
-    # 即使验证失败，消息可能已经被 Codex 接收并开始处理
-    # （verify 检查的是 prompt 显示，但 Codex 可能已经在 Working 状态）
-    log "WARNING: 验证未通过，但消息可能已被接收"
-    echo "WARN: 发送 ${MSG_LEN} 字符到 ${SESSION}:${WINDOW}，但验证未确认"
-    date +%s > "${STATE_DIR}/manual-task-${SAFE_WINDOW}"
-    exit 0  # 不报错，避免阻塞调用方
+    log "ERROR: 验证未通过，发送结果未确认"
+    echo "ERROR: 发送 ${MSG_LEN} 字符到 ${SESSION}:${WINDOW} 失败（未通过验证）" >&2
+    exit 4
 fi

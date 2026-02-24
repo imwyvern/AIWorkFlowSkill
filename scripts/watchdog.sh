@@ -36,10 +36,19 @@ IDLE_THRESHOLD="${IDLE_THRESHOLD:-300}"              # idle 超过多久触发 n
 IDLE_CONFIRM_PROBES="${IDLE_CONFIRM_PROBES:-3}"      # 连续多少次 idle 才确认空闲
 WORKING_INERTIA_SECONDS="${WORKING_INERTIA_SECONDS:-90}" # 最近 working 的惯性窗口（秒）
 NUDGE_COOLDOWN=300        # 同一窗口 nudge 冷却（秒），防止反复骚扰
+NUDGE_MAX_RETRY="${NUDGE_MAX_RETRY:-5}"      # 连续无响应 nudge 上限
+NUDGE_PAUSE_SECONDS="${NUDGE_PAUSE_SECONDS:-1800}" # 达到上限后暂停时长（秒）
 PERMISSION_COOLDOWN=60    # 权限 approve 冷却（秒）
 COMPACT_COOLDOWN=600      # compact 冷却（秒）
 SHELL_COOLDOWN=300        # shell 恢复冷却（秒）
 LOW_CONTEXT_THRESHOLD="${LOW_CONTEXT_THRESHOLD:-25}"
+CODEX_STATE_WORKING="${CODEX_STATE_WORKING:-working}"
+CODEX_STATE_IDLE="${CODEX_STATE_IDLE:-idle}"
+CODEX_STATE_IDLE_LOW_CONTEXT="${CODEX_STATE_IDLE_LOW_CONTEXT:-idle_low_context}"
+CODEX_STATE_PERMISSION="${CODEX_STATE_PERMISSION:-permission}"
+CODEX_STATE_PERMISSION_WITH_REMEMBER="${CODEX_STATE_PERMISSION_WITH_REMEMBER:-permission_with_remember}"
+CODEX_STATE_SHELL="${CODEX_STATE_SHELL:-shell}"
+CODEX_STATE_ABSENT="${CODEX_STATE_ABSENT:-absent}"
 ACK_CHECK_MAX_JOBS="${ACK_CHECK_MAX_JOBS:-8}"
 ACK_CHECK_LOCK_STALE_SECONDS="${ACK_CHECK_LOCK_STALE_SECONDS:-120}"
 
@@ -53,6 +62,7 @@ COMMIT_COUNT_DIR="$STATE_DIR/watchdog-commits"
 REVIEW_COOLDOWN=7200       # 增量 review 冷却（秒）= 2 小时
 COMMITS_FOR_REVIEW=15      # 触发增量 review 的 commit 数
 FEAT_WITHOUT_TEST_LIMIT=5  # 连续 feat 无 test 触发写测试 nudge
+PRD_DONE_FILTER_RE='✅\|⛔\|blocked\|（done）\|(done)\|done\|完成\|^\- \[x\]\|^\- \[X\]'
 mkdir -p "$(dirname "$LOG")" "$LOCK_DIR" "$COOLDOWN_DIR" "$ACTIVITY_DIR" "$COMMIT_COUNT_DIR"
 
 count_prd_todo_remaining() {
@@ -61,7 +71,7 @@ count_prd_todo_remaining() {
     local remaining=0
 
     if [ -f "$prd_todo" ]; then
-        remaining=$(grep '^- ' "$prd_todo" | grep -vic '✅\|⛔\|blocked\|done\|完成\|^- \\[x\\]\\|^- \\[X\\]' || true)
+        remaining=$(grep '^- ' "$prd_todo" | grep -vic "$PRD_DONE_FILTER_RE" || true)
         remaining=$(normalize_int "$remaining")
     fi
 
@@ -103,7 +113,8 @@ is_prd_todo_complete() {
 }
 
 # ---- 项目配置 ----
-# watchdog-projects.conf 格式: window:project_dir:nudge_message
+# watchdog-projects.conf 格式: window:project_dir
+# 兼容旧格式 window:project_dir:nudge_message（第三列会被忽略）
 PROJECT_CONFIG_FILE="$HOME/.autopilot/watchdog-projects.conf"
 DEFAULT_PROJECTS=(
     "Shike:/Users/wes/Shike"
@@ -226,7 +237,7 @@ get_window_status_json() {
     # All are valid outputs; only capture stderr failures
     result=$("$SCRIPT_DIR/codex-status.sh" "$window" 2>/dev/null) || true
     if [ -z "$result" ] || ! echo "$result" | jq -e '.status' >/dev/null 2>&1; then
-        echo '{"status":"absent","context_num":-1}'
+        echo "{\"status\":\"${CODEX_STATE_ABSENT}\",\"context_num\":-1}"
     else
         echo "$result"
     fi
@@ -284,7 +295,7 @@ start_nudge_ack_check() {
             cur_state=$(extract_status_field "$cur_json" "status")
             cur_ctx=$(extract_context_num_field "$cur_json")
 
-            if [ "$cur_state" = "working" ]; then
+            if [ "$cur_state" = "$CODEX_STATE_WORKING" ]; then
                 log "✅ ${window}: ${reason} ack by working state"
                 return 0
             fi
@@ -363,6 +374,42 @@ set_cooldown() {
     now_ts > "${COOLDOWN_DIR}/${key}"
 }
 
+nudge_pause_file() {
+    local safe="$1"
+    echo "${STATE_DIR}/nudge-paused-until-${safe}"
+}
+
+is_nudge_paused() {
+    local safe="$1"
+    local pause_file pause_until now
+    pause_file=$(nudge_pause_file "$safe")
+    [ -f "$pause_file" ] || return 1
+
+    pause_until=$(cat "$pause_file" 2>/dev/null || echo 0)
+    pause_until=$(normalize_int "$pause_until")
+    now=$(now_ts)
+    if [ "$pause_until" -gt "$now" ]; then
+        return 0
+    fi
+
+    rm -f "$pause_file" 2>/dev/null || true
+    return 1
+}
+
+pause_auto_nudge() {
+    local window="$1" safe="$2" reason="$3"
+    local now pause_until pause_file until_text pause_minutes
+    now=$(now_ts)
+    pause_until=$((now + NUDGE_PAUSE_SECONDS))
+    pause_file=$(nudge_pause_file "$safe")
+    echo "$pause_until" > "$pause_file"
+    pause_minutes=$((NUDGE_PAUSE_SECONDS / 60))
+
+    until_text=$(date -r "$pause_until" '+%H:%M:%S' 2>/dev/null || echo "${NUDGE_PAUSE_SECONDS}s 后")
+    log "🚨 ${window}: ${reason}; pausing auto-nudge for ${NUDGE_PAUSE_SECONDS}s (until ${until_text})"
+    send_telegram "🚨 ${window}: ${reason}。已暂停自动 nudge ${pause_minutes} 分钟（至 ${until_text}）。"
+}
+
 # 记录窗口最后一次有活动的时间
 update_activity() {
     local safe="$1"
@@ -420,7 +467,7 @@ detect_state() {
 
     status_json=$(get_window_status_json "$window")
     state=$(extract_status_field "$status_json" "status")
-    [ -n "$state" ] || state="absent"
+    [ -n "$state" ] || state="$CODEX_STATE_ABSENT"
 
     # 兼容 post-compact 恢复协议（基于统一状态输出的 context_num）
     ctx_num=$(extract_context_num_field "$status_json")
@@ -551,16 +598,17 @@ handle_idle() {
     nudge_count=$(cat "$nudge_count_file" 2>/dev/null || echo 0)
     nudge_count=$(normalize_int "$nudge_count")
 
+    if is_nudge_paused "$safe"; then
+        return
+    fi
+
     if [ "$has_queue_task" = "false" ]; then
         # 只有非队列任务才受退避限制
-        # 超过 6 次无响应 → 停止 nudge，发一次 Telegram 告警
-        if [ "$nudge_count" -ge 6 ]; then
-            local alert_file="${STATE_DIR}/alert-stalled-${safe}"
-            if ! [ -f "$alert_file" ]; then
-                touch "$alert_file"
-                log "🚨 ${window}: stalled after ${nudge_count} nudges, stopping auto-nudge"
-                send_telegram "🚨 ${window} 已 nudge ${nudge_count} 次无响应，自动 nudge 已停止。请手动检查。"
-            fi
+        # 连续 N 次无响应 → 暂停 30 分钟，避免无限 nudge
+        if [ "$nudge_count" -ge "$NUDGE_MAX_RETRY" ]; then
+            pause_auto_nudge "$window" "$safe" "已连续 ${nudge_count} 次 nudge 无响应"
+            echo 0 > "$nudge_count_file"
+            sync_project_status "$project_dir" "nudge_paused" "window=${window}" "state=idle" "reason=max_retry" "retry=${nudge_count}"
             return
         fi
 
@@ -590,7 +638,7 @@ handle_idle() {
     # 二次检查
     local state2
     state2=$(detect_state "$window" "$safe")
-    if [ "$state2" = "idle" ] || [ "$state2" = "idle_low_context" ]; then
+    if [ "$state2" = "$CODEX_STATE_IDLE" ] || [ "$state2" = "$CODEX_STATE_IDLE_LOW_CONTEXT" ]; then
         local nudge_msg before_head before_ctx before_status_json
         before_head=$(run_with_timeout 10 git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "none")
         before_status_json=$(get_window_status_json "$window")
@@ -600,7 +648,8 @@ handle_idle() {
         manual_block_reason=$(echo "$before_status_json" | jq -r '.manual_block_reason // ""' 2>/dev/null || echo "")
         if [ -n "$manual_block_reason" ]; then
             log "🛑 ${window}: manual block detected (${manual_block_reason}) — pausing nudges"
-            send_telegram_alert "$window" "manual block detected (${manual_block_reason})"
+            pause_auto_nudge "$window" "$safe" "检测到人工阻塞（${manual_block_reason}）"
+            echo 0 > "$nudge_count_file"
             sync_project_status "$project_dir" "nudge_blocked_manual" "window=${window}" "state=idle" "issue=${manual_block_reason}"
             release_lock "$safe"
             return
@@ -780,7 +829,7 @@ handle_low_context() {
     # 二次检查：必须仍在 idle 状态（› 提示符）且低上下文
     local state2
     state2=$(detect_state "$window" "$safe")
-    if [ "$state2" = "idle_low_context" ]; then
+    if [ "$state2" = "$CODEX_STATE_IDLE_LOW_CONTEXT" ]; then
         # ★ compact 前保存上下文快照：未提交改动 + 最近任务 + 队列状态
         local snapshot_file="${STATE_DIR}/pre-compact-snapshot-${safe}"
         {
@@ -827,7 +876,7 @@ handle_shell() {
     # 二次检查：必须仍在 shell 状态
     local state2
     state2=$(detect_state "$window" "$safe")
-    if [ "$state2" = "shell" ]; then
+    if [ "$state2" = "$CODEX_STATE_SHELL" ]; then
         $TMUX send-keys -t "${SESSION}:${window}" "cd '${project_dir}' && (${CODEX} resume --last 2>/dev/null || ${CODEX} --full-auto)" Enter
         set_cooldown "$key"
         log "🔄 ${window}: shell recovery"
@@ -865,9 +914,9 @@ check_new_commits() {
 
     # P0-1 fix: 有新 commit 说明刚在工作，重置 activity 时间戳
     update_activity "$safe"
-    # 重置 nudge 退避计数 + 清除 stalled 告警
+    # 重置 nudge 退避计数 + 清除暂停状态
     echo 0 > "${COOLDOWN_DIR}/nudge-count-${safe}"
-    rm -f "${STATE_DIR}/alert-stalled-${safe}"
+    rm -f "$(nudge_pause_file "$safe")" "${STATE_DIR}/alert-stalled-${safe}"
     # Fix 4: 新 commit 重置 review 重试计数
     rm -f "${STATE_DIR}/review-retry-count-${safe}" "${STATE_DIR}/review-failed-${safe}"
 
@@ -1067,7 +1116,7 @@ check_incremental_review_trigger() {
     # 条件2: 当前是 idle 状态
     local state
     state=$(detect_state "$window" "$safe")
-    [ "$state" != "idle" ] && return
+    [ "$state" != "$CODEX_STATE_IDLE" ] && return
 
     # 触发增量 review — 写 pending 标记，cron 执行成功后才重置计数（两阶段提交）
     local trigger_file="${STATE_DIR}/review-trigger-${safe}"
@@ -1096,7 +1145,7 @@ get_smart_nudge() {
     local prd_todo="${project_dir}/prd-todo.md"
     if [ -f "$prd_todo" ]; then
         local remaining
-        remaining=$(grep '^- ' "$prd_todo" | grep -vic '✅\|⛔\|blocked\|done\|完成\|^\- \[x\]\|^\- \[X\]' || true)
+        remaining=$(grep '^- ' "$prd_todo" | grep -vic "$PRD_DONE_FILTER_RE" || true)
         remaining=$(normalize_int "$remaining")
         if [ "$remaining" -eq 0 ]; then
             # PRD 完成 → 检查是否有 review issues 或 autocheck issues 需要修
@@ -1177,7 +1226,7 @@ get_smart_nudge() {
     # PRD 驱动 nudge：从 prd-todo.md 读取下一个待办
     if [ -f "$prd_todo" ]; then
         local next_task
-        next_task=$(grep '^- ' "$prd_todo" | grep -vi '✅\|⛔\|blocked\|done\|完成\|^\- \[x\]\|^\- \[X\]' | head -1 | sed 's/^- //')
+        next_task=$(grep '^- ' "$prd_todo" | grep -vi "$PRD_DONE_FILTER_RE" | head -1 | sed 's/^- //')
         if [ -n "$next_task" ]; then
             echo "实现以下 PRD 需求：${next_task}"
             return
@@ -1262,18 +1311,18 @@ while true; do
             if [ "$new_remaining" -gt 0 ]; then
                 log "📋 ${window}: prd-todo.md updated, ${new_remaining} items remaining — resetting nudge"
                 echo 0 > "${COOLDOWN_DIR}/nudge-count-${safe}"
-                rm -f "${STATE_DIR}/alert-stalled-${safe}"
+                rm -f "$(nudge_pause_file "$safe")" "${STATE_DIR}/alert-stalled-${safe}"
                 send_telegram_alert "$window" "prd-todo.md 有新需求 (${new_remaining} 项待完成)，已重新激活 nudge"
             fi
         fi
 
         # Fix 6: 非 working 状态清除僵死追踪
-        if [ "$state" != "working" ]; then
+        if [ "$state" != "$CODEX_STATE_WORKING" ]; then
             rm -f "${STATE_DIR}/working-since-${safe}" "${STATE_DIR}/working-head-${safe}" "${STATE_DIR}/working-ctx-${safe}" "${STATE_DIR}/stall-alerted-${safe}" 2>/dev/null || true
         fi
 
         case "$state" in
-            working)
+            "$CODEX_STATE_WORKING")
                 update_activity "$safe"
                 reset_idle_probe "$safe"
                 # Fix 6: TUI 僵死检测
@@ -1309,25 +1358,25 @@ while true; do
                     fi
                 fi
                 ;;
-            permission|permission_with_remember)
+            "$CODEX_STATE_PERMISSION"|"${CODEX_STATE_PERMISSION_WITH_REMEMBER}")
                 reset_idle_probe "$safe"
                 handle_permission "$window" "$safe"
                 ;;
-            idle)
+            "$CODEX_STATE_IDLE")
                 if idle_state_confirmed "$safe"; then
                     handle_idle "$window" "$safe" "$project_dir"
                 fi
                 ;;
-            idle_low_context)
+            "$CODEX_STATE_IDLE_LOW_CONTEXT")
                 if idle_state_confirmed "$safe"; then
                     handle_low_context "$window" "$safe" "$project_dir"
                 fi
                 ;;
-            shell)
+            "$CODEX_STATE_SHELL")
                 reset_idle_probe "$safe"
                 handle_shell "$window" "$safe" "$project_dir"
                 ;;
-            absent)
+            "$CODEX_STATE_ABSENT")
                 # tmux window 不存在，跳过
                 reset_idle_probe "$safe"
                 ;;

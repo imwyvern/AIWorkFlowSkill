@@ -94,7 +94,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# 项目配置（优先读取 watchdog-projects.conf）
+# 项目配置（优先读取 watchdog-projects.conf，格式 window:project_dir，兼容旧三列）
 PROJECT_CONFIG_FILE="$HOME/.autopilot/watchdog-projects.conf"
 DEFAULT_PROJECTS=(
     "Shike:/Users/wes/Shike"
