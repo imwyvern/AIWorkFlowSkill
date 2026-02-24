@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 AUTOPILOT_DIR = os.path.expanduser("~/.autopilot")
 CONFIG_PATH = os.path.join(AUTOPILOT_DIR, "config.yaml")
 STATE_PATH = os.path.join(AUTOPILOT_DIR, "state.json")
+MAX_HISTORY_ENTRIES = 200
 
 
 @dataclass
@@ -190,12 +191,16 @@ def save_state(state: GlobalState) -> bool:
     # 确保目录存在
     os.makedirs(AUTOPILOT_DIR, exist_ok=True)
     
+    # 避免 history 无限增长
+    if len(state.history) > MAX_HISTORY_ENTRIES:
+        state.history = state.history[-MAX_HISTORY_ENTRIES:]
+    
     # 转换为字典
     data = {
         'started_at': state.started_at,
         'last_tick_at': state.last_tick_at,
         'projects': {},
-        'history': state.history[-100:],  # 只保留最近 100 条历史
+        'history': state.history,  # 只保留最近 MAX_HISTORY_ENTRIES 条历史
         # Phase 3 字段
         'active_projects': state.active_projects,
         'paused_projects': state.paused_projects,
@@ -272,6 +277,8 @@ def record_history(state: GlobalState,
         entry['error'] = error
     
     state.history.append(entry)
+    if len(state.history) > MAX_HISTORY_ENTRIES:
+        state.history = state.history[-MAX_HISTORY_ENTRIES:]
 
 
 def get_project_state(state: GlobalState, project_dir: str) -> ProjectState:

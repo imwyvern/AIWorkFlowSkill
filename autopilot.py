@@ -499,6 +499,38 @@ def ensure_tmux_sessions(projects, sessions, config):
         setup_tmux_session(tmux_projects, config)
 
 
+def normalize_project_dir(project_dir: str) -> str:
+    """规范化项目目录路径（用于状态去重/清理）"""
+    return os.path.realpath(os.path.expanduser(project_dir.strip()))
+
+
+def cleanup_stale_project_state(state: GlobalState, config: dict) -> None:
+    """清理不在 config.yaml project_dirs 中的僵尸项目状态"""
+    configured_dirs = config.get('project_dirs', [])
+    if not isinstance(configured_dirs, list) or not configured_dirs:
+        return
+    
+    valid_dirs = {
+        normalize_project_dir(project_dir)
+        for project_dir in configured_dirs
+        if isinstance(project_dir, str) and project_dir.strip()
+    }
+    if not valid_dirs:
+        return
+    
+    stale_dirs = [
+        project_dir
+        for project_dir in list(state.projects.keys())
+        if normalize_project_dir(project_dir) not in valid_dirs
+    ]
+    
+    for project_dir in stale_dirs:
+        del state.projects[project_dir]
+    
+    if stale_dirs:
+        logger.info(f"清理失效项目状态 {len(stale_dirs)} 个: {', '.join(stale_dirs)}")
+
+
 def main():
     """
     主入口 (v3)
@@ -520,6 +552,7 @@ def main():
         return
     
     state = load_state()
+    cleanup_stale_project_state(state, config)
     state.last_tick_at = datetime.now().isoformat()
     if not state.started_at:
         state.started_at = datetime.now().isoformat()
