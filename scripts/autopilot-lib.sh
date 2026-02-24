@@ -65,8 +65,8 @@ run_with_timeout() {
 # Sets: LIB_TG_TOKEN, LIB_TG_CHAT
 load_telegram_config() {
     local config_file="${HOME}/.autopilot/config.yaml"
-    LIB_TG_TOKEN=$(grep '^bot_token' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
-    LIB_TG_CHAT=$(grep '^chat_id' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+    LIB_TG_TOKEN=$(grep -E '^[[:space:]]*bot_token[[:space:]]*:' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+    LIB_TG_CHAT=$(grep -E '^[[:space:]]*chat_id[[:space:]]*:' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
 }
 
 # Send a Telegram message (background, non-blocking)
