@@ -95,9 +95,21 @@ case "$STATUS" in
 
   idle)
     rm -f "$COMPACT_FLAG"
-    # Fix 2: 读取 watchdog 退避状态，同步退避
+    # 读取 watchdog 暂停状态（达到最大重试后暂停 30 分钟）
+    WD_PAUSE_FILE="${STATE_DIR}/nudge-paused-until-${SAFE_WINDOW}"
+    if [ -f "$WD_PAUSE_FILE" ]; then
+        WD_PAUSE_UNTIL=$(cat "$WD_PAUSE_FILE" 2>/dev/null || echo 0)
+        WD_PAUSE_UNTIL=$(normalize_int "$WD_PAUSE_UNTIL")
+        WD_NOW=$(date +%s)
+        if [ "$WD_PAUSE_UNTIL" -gt "$WD_NOW" ]; then
+            echo "⏭ $WINDOW: watchdog 暂停中（到 $(date -r "$WD_PAUSE_UNTIL" '+%H:%M:%S' 2>/dev/null || echo "$WD_PAUSE_UNTIL")），跳过 nudge"
+            exit 0
+        fi
+        rm -f "$WD_PAUSE_FILE"
+    fi
+    # 兼容旧版 stalled 标记
     if [ -f "${STATE_DIR}/alert-stalled-${SAFE_WINDOW}" ]; then
-        echo "⏭ $WINDOW: watchdog 已标记 stalled，跳过 nudge"
+        echo "⏭ $WINDOW: watchdog 旧版 stalled 标记存在，跳过 nudge"
         exit 0
     fi
     WD_NUDGE_COUNT_FILE="${COOLDOWN_DIR}/nudge-count-${SAFE_WINDOW}"
