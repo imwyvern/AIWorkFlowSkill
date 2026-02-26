@@ -300,7 +300,6 @@ for entry in "${PROJECTS[@]}"; do
     PHASE_TRACKING+=("$PHASE_SUMMARY")
     REVIEW_STATUS_TRACKING+=("$REVIEW_SUMMARY")
     # 队列任务信息
-    local safe_window
     safe_window=$(echo "$WINDOW" | tr -cd 'a-zA-Z0-9_-')
     QUEUE_COUNT=$("${SCRIPT_DIR}/task-queue.sh" count "$safe_window" 2>/dev/null || echo 0)
     QUEUE_COUNT=$(normalize_int "$QUEUE_COUNT")
