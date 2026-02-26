@@ -1245,6 +1245,17 @@ get_smart_nudge() {
 
 # ---- 主循环 ----
 # ---- 进程级互斥锁 ----
+WATCHDOG_PIDFILE="${LOCK_DIR}/watchdog.pid"
+if [ -f "$WATCHDOG_PIDFILE" ]; then
+    existing_pid=$(cat "$WATCHDOG_PIDFILE" 2>/dev/null || echo 0)
+    existing_pid=$(normalize_int "$existing_pid")
+    if [ "$existing_pid" -gt 0 ] && kill -0 "$existing_pid" 2>/dev/null; then
+        echo "watchdog already running (pid ${existing_pid})"
+        exit 0
+    fi
+    rm -f "$WATCHDOG_PIDFILE" 2>/dev/null || true
+fi
+
 WATCHDOG_LOCK="${LOCK_DIR}/watchdog-main.lock.d"
 if ! mkdir "$WATCHDOG_LOCK" 2>/dev/null; then
     # 通过 PID + 进程启动签名识别锁持有者，避免 PID 复用误判
@@ -1267,6 +1278,7 @@ fi
 echo $$ > "${WATCHDOG_LOCK}/pid"
 pid_start_signature "$$" > "${WATCHDOG_LOCK}/start_sig" 2>/dev/null || true
 now_ts > "${WATCHDOG_LOCK}/started_at"
+echo $$ > "$WATCHDOG_PIDFILE"
 # ERR trap 仅用于诊断；不要与 set -e 组合
 trap 'log "💥 ERR at line $LINENO (code=$?)"' ERR
 # Graceful shutdown: kill background jobs, clean lock
@@ -1280,6 +1292,7 @@ cleanup_watchdog() {
         kill -9 $pids 2>/dev/null || true
     fi
     rm -rf "$WATCHDOG_LOCK"
+    rm -f "$WATCHDOG_PIDFILE"
 }
 trap cleanup_watchdog EXIT
 trap 'log "🛑 Received SIGTERM, shutting down..."; exit 0' TERM INT

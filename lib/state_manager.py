@@ -232,11 +232,20 @@ def save_state(state: GlobalState) -> bool:
         
         data['projects'][name] = proj_data
     
+    tmp_state_path = f"{STATE_PATH}.tmp"
     try:
-        with open(STATE_PATH, 'w', encoding='utf-8') as f:
+        with open(tmp_state_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_state_path, STATE_PATH)
         return True
     except Exception as e:
+        if os.path.exists(tmp_state_path):
+            try:
+                os.remove(tmp_state_path)
+            except OSError:
+                pass
         logger.error(f"保存状态文件失败: {e}")
         return False
 

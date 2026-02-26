@@ -2,6 +2,7 @@
 # autopilot-constants.sh — 脚本共享常量
 #
 # 允许通过环境变量覆盖，避免硬编码漂移。
+AUTOPILOT_VERSION="0.4.0"
 
 : "${LOW_CONTEXT_THRESHOLD:=25}"
 : "${LOW_CONTEXT_CRITICAL_THRESHOLD:=15}"
