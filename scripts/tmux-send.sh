@@ -16,7 +16,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/autopilot-lib.sh"
 
-TMUX="/opt/homebrew/bin/tmux"
+TMUX="${TMUX_BIN:-$(command -v tmux || echo /opt/homebrew/bin/tmux)}"
 SESSION="autopilot"
 WINDOW="${1:?用法: tmux-send.sh <window> <message>}"
 MESSAGE="${2:?缺少消息参数}"
@@ -58,7 +58,7 @@ acquire_send_lock() {
     # 10s 超时自动过期（防死锁）
     local lock_age=0
     if [ -d "$SEND_LOCK" ]; then
-        lock_age=$(( $(date +%s) - $(stat -f %m "$SEND_LOCK" 2>/dev/null || echo 0) ))
+        lock_age=$(( $(date +%s) - $(file_mtime "$SEND_LOCK") ))
     fi
     if [ "$lock_age" -gt 10 ]; then
         rm -rf "$SEND_LOCK" 2>/dev/null || true

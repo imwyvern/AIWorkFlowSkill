@@ -20,8 +20,8 @@
 # This script intentionally tolerates non-zero probe commands (e.g. grep no-match),
 # and the ERR trap is diagnostic-only.
 set -uo pipefail
-TMUX="/opt/homebrew/bin/tmux"
-CODEX="/opt/homebrew/bin/codex"
+TMUX="${TMUX_BIN:-$(command -v tmux || echo /opt/homebrew/bin/tmux)}"
+CODEX="${CODEX_BIN:-$(command -v codex || echo /opt/homebrew/bin/codex)}"
 SESSION="autopilot"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/autopilot-lib.sh"
@@ -113,8 +113,10 @@ is_prd_todo_complete() {
 }
 
 # ---- 项目配置 ----
-# watchdog-projects.conf 格式: window:project_dir
-# 兼容旧格式 window:project_dir:nudge_message（第三列会被忽略）
+# 项目配置来源（优先级）:
+# 1) config.yaml 中 projects 段（统一配置源）
+# 2) watchdog-projects.conf（兼容 fallback）
+CONFIG_YAML_FILE="$HOME/.autopilot/config.yaml"
 PROJECT_CONFIG_FILE="$HOME/.autopilot/watchdog-projects.conf"
 DEFAULT_PROJECTS=(
     "Shike:/Users/wes/Shike"
@@ -163,34 +165,195 @@ assert_runtime_ready() {
     fi
 }
 
+parse_projects_from_config_yaml() {
+    local config_file="$1"
+    [ -f "$config_file" ] || return 1
+
+    awk '
+    function ltrim(s) { sub(/^[[:space:]]+/, "", s); return s }
+    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
+    function trim(s) { return rtrim(ltrim(s)) }
+    function strip_quotes(s) {
+        s = trim(s)
+        if (s ~ /^".*"$/) return substr(s, 2, length(s) - 2)
+        return s
+    }
+    function strip_inline_comment(s, out, i, ch, in_double) {
+        out = ""
+        in_double = 0
+        for (i = 1; i <= length(s); i++) {
+            ch = substr(s, i, 1)
+            if (ch == "\"") {
+                in_double = !in_double
+            } else if (ch == "#" && in_double == 0) {
+                break
+            }
+            out = out ch
+        }
+        return out
+    }
+    function reset_item() {
+        current_window = ""
+        current_dir = ""
+    }
+    function flush_item() {
+        if (current_window == "" && current_dir == "") return
+        if (current_window == "" || current_dir == "") {
+            parse_error = 1
+            reset_item()
+            return
+        }
+        print current_window ":" current_dir
+        parsed_count++
+        reset_item()
+    }
+    BEGIN {
+        in_projects = 0
+        projects_indent = -1
+        list_mode = 0
+        saw_projects = 0
+        parse_error = 0
+        parsed_count = 0
+        reset_item()
+    }
+    {
+        line = $0
+        sub(/\r$/, "", line)
+
+        if (in_projects == 0) {
+            if (line ~ /^[[:space:]]*projects:[[:space:]]*($|#)/) {
+                saw_projects = 1
+                in_projects = 1
+                match(line, /^[[:space:]]*/)
+                projects_indent = RLENGTH
+                list_mode = 0
+            }
+            next
+        }
+
+        if (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/) next
+
+        match(line, /^[[:space:]]*/)
+        indent = RLENGTH
+        if (indent <= projects_indent) {
+            flush_item()
+            in_projects = 0
+            next
+        }
+
+        content = substr(line, indent + 1)
+        content = trim(strip_inline_comment(content))
+        if (content == "") next
+
+        if (content ~ /^-[[:space:]]*/) {
+            flush_item()
+            list_mode = 1
+            content = trim(substr(content, 2))
+            if (content == "") next
+        }
+
+        split_pos = index(content, ":")
+        if (split_pos == 0) {
+            if (list_mode == 1) parse_error = 1
+            next
+        }
+
+        key = strip_quotes(trim(substr(content, 1, split_pos - 1)))
+        value = trim(strip_quotes(strip_inline_comment(substr(content, split_pos + 1))))
+
+        if (value == "") {
+            if (key == "window" || key == "name" || key == "dir" || key == "project_dir" || key == "path") {
+                parse_error = 1
+            }
+            next
+        }
+
+        if (key == "window" || key == "name") {
+            current_window = value
+            if (current_window != "" && current_dir != "") flush_item()
+            next
+        }
+
+        if (key == "dir" || key == "project_dir" || key == "path") {
+            current_dir = value
+            if (current_window != "" && current_dir != "") flush_item()
+            next
+        }
+
+        if (list_mode == 0) {
+            current_window = key
+            current_dir = value
+            flush_item()
+        }
+    }
+    END {
+        if (in_projects == 1) flush_item()
+        if (saw_projects == 0) exit 10
+        if (parse_error != 0 || parsed_count == 0) exit 11
+    }
+    ' "$config_file"
+}
+
+load_projects_from_config_yaml() {
+    local parsed_lines line window dir
+    parsed_lines=$(parse_projects_from_config_yaml "$CONFIG_YAML_FILE" 2>/dev/null) || return 1
+    [ -n "$parsed_lines" ] || return 1
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        [ -z "$line" ] && continue
+        window="${line%%:*}"
+        dir="${line#*:}"
+        [ "$dir" = "$line" ] && continue
+        [ -z "$window" ] && continue
+        [ -z "$dir" ] && continue
+        PROJECTS+=("${window}:${dir}")
+    done <<< "$parsed_lines"
+
+    [ ${#PROJECTS[@]} -gt 0 ]
+}
+
+load_projects_from_fallback_conf() {
+    local line window rest dir
+    [ -f "$PROJECT_CONFIG_FILE" ] || return 1
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        case "$line" in
+            ""|\#*)
+                continue
+                ;;
+        esac
+
+        window="${line%%:*}"
+        rest="${line#*:}"
+        [ "$rest" = "$line" ] && continue
+        dir="${rest%%:*}"
+
+        [ -z "$window" ] && continue
+        [ -z "$dir" ] && continue
+        PROJECTS+=("${window}:${dir}")
+    done < "$PROJECT_CONFIG_FILE"
+
+    [ ${#PROJECTS[@]} -gt 0 ]
+}
+
 load_projects() {
     PROJECTS=()
 
-    if [ -f "$PROJECT_CONFIG_FILE" ]; then
-        while IFS= read -r line || [ -n "$line" ]; do
-            line="${line%$'\r'}"
-            case "$line" in
-                ""|\#*)
-                    continue
-                    ;;
-            esac
-
-            local window rest dir
-            window="${line%%:*}"
-            rest="${line#*:}"
-            [ "$rest" = "$line" ] && continue
-            dir="${rest%%:*}"
-
-            [ -z "$window" ] && continue
-            [ -z "$dir" ] && continue
-            PROJECTS+=("${window}:${dir}")
-        done < "$PROJECT_CONFIG_FILE"
+    if load_projects_from_config_yaml; then
+        log "📁 loaded ${#PROJECTS[@]} projects from config.yaml projects"
+        return
     fi
 
-    if [ ${#PROJECTS[@]} -eq 0 ]; then
-        PROJECTS=("${DEFAULT_PROJECTS[@]}")
-        log "⚠️ project config missing/empty, fallback to defaults (${#PROJECTS[@]} projects)"
+    PROJECTS=()
+    if load_projects_from_fallback_conf; then
+        log "⚠️ config.yaml projects missing/invalid, fallback to watchdog-projects.conf (${#PROJECTS[@]} projects)"
+        return
     fi
+
+    PROJECTS=("${DEFAULT_PROJECTS[@]}")
+    log "⚠️ project config missing/empty, fallback to defaults (${#PROJECTS[@]} projects)"
 }
 
 send_tmux_message() {
@@ -271,7 +434,7 @@ start_nudge_ack_check() {
 
     if [ -d "$ack_lock" ]; then
         local lock_age
-        lock_age=$(( $(now_ts) - $(stat -f %m "$ack_lock" 2>/dev/null || echo 0) ))
+        lock_age=$(( $(now_ts) - $(file_mtime "$ack_lock") ))
         if [ "$lock_age" -gt "$ACK_CHECK_LOCK_STALE_SECONDS" ]; then
             rm -rf "$ack_lock" 2>/dev/null || true
         fi
@@ -344,6 +507,10 @@ pid_looks_like_watchdog() {
 }
 
 rotate_log() {
+    if [ -x "${SCRIPT_DIR}/rotate-logs.sh" ]; then
+        "${SCRIPT_DIR}/rotate-logs.sh" >/dev/null 2>&1 || log "⚠️ rotate-logs.sh failed"
+    fi
+
     local lines
     lines=$(wc -l < "$LOG" 2>/dev/null || echo 0)
     if [ "$lines" -gt 5000 ]; then
