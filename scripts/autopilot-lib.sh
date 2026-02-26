@@ -40,6 +40,12 @@ now_ts() {
     date +%s
 }
 
+file_mtime() {
+    local f="$1"
+    if stat -f %m "$f" 2>/dev/null; then return; fi
+    stat -c %Y "$f" 2>/dev/null || echo 0
+}
+
 # macOS-compatible timeout (prefers timeout/gtimeout, fallback to background+kill)
 _LIB_TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
@@ -108,7 +114,7 @@ acquire_lock() {
     # Check for stale lock
     if [ -d "$lock_path" ]; then
         local lock_age
-        lock_age=$(( $(now_ts) - $(stat -f %m "$lock_path" 2>/dev/null || echo 0) ))
+        lock_age=$(( $(now_ts) - $(file_mtime "$lock_path") ))
         if [ "$lock_age" -gt "$stale_seconds" ]; then
             rm -rf "$lock_path" 2>/dev/null || true
             if mkdir "$lock_path" 2>/dev/null; then

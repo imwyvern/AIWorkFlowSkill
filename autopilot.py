@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# ⚠️ DEPRECATED: 此文件已被 scripts/watchdog.sh 替代。
+# 仅 cleanup-state.py 仍在使用。请勿添加新功能。
 """
 Codex Autopilot v3 — tmux + CLI 模式
 
