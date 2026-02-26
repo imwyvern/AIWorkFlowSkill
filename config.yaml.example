@@ -33,21 +33,21 @@ scheduler:
 # Telegram 通知与命令
 # 请填入你的 Bot Token 和 Chat ID
 telegram:
-  bot_token: "8144550528:AAGl9pEDI-hC41XoJgixrRO_x0pH7wXZWE4"
-  chat_id: "5321002140"
+  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+  chat_id: "YOUR_TELEGRAM_CHAT_ID"
   status_interval: 1800      # 状态报告间隔 (秒)
 
 # 项目目录列表 (简单模式)
 # 添加你要自动驾驶的项目路径
 # 这些目录会被扫描，优先使用 ~/.autopilot/projects/{name}/tasks.yaml
 project_dirs:
-  - "/Users/wes/Shike"
-  - "/Users/wes/projects/agent-simcity"
-  - "/Users/wes/replyher_android-2"
+  - "~/Shike"
+  - "~/projects/agent-simcity"
+  - "~/replyher_android-2"
   # 以下项目暂不监督，需要时再加回来
-  # - "/Users/wes/autocontent"
-  # - "/Users/wes/SoulKeyboard-Wechat"
-  # - "/Users/wes/quant-develop"
+  # - "~/autocontent"
+  # - "~/SoulKeyboard-Wechat"
+  # - "~/quant-develop"
 
 # 高级模式: 使用 ~/.autopilot/projects/ 目录
 # 每个项目一个子目录，包含 tasks.yaml
@@ -68,7 +68,7 @@ project_dirs:
 # tasks.yaml 示例:
 # project:
 #   name: "Shike"
-#   dir: "/Users/wes/Shike"
+#   dir: "~/Shike"
 #   description: "食客 App"
 #   enabled: true
 #   priority: 1                    # 数字越小优先级越高
