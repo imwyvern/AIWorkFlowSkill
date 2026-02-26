@@ -5,8 +5,6 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STATE_DIR="${HOME}/.autopilot/state"
-TELEGRAM_BOT_TOKEN="8144550528:AAGl9pEDI-hC41XoJgixrRO_x0pH7wXZWE4"
-TELEGRAM_CHAT_ID="5321002140"
 
 PROJECT_NAME="${1:?用法: claude-fallback.sh <project_name> <project_dir> <task>}"
 PROJECT_DIR="${2:?缺少 project_dir}"
@@ -14,13 +12,13 @@ TASK="${3:?缺少 task}"
 
 log() { echo "[claude-fallback $(date '+%H:%M:%S')] $*"; }
 
-send_telegram() {
-    local text="$1"
-    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -H 'Content-Type: application/json' \
-        -d "$(jq -n --arg chat "$TELEGRAM_CHAT_ID" --arg text "$text" '{chat_id:$chat, text:$text}')" \
-        >/dev/null 2>&1 || true
-}
+if [ -f "${SCRIPT_DIR}/autopilot-lib.sh" ]; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/autopilot-lib.sh"
+else
+    log "⚠️ autopilot-lib.sh not found, telegram notifications disabled"
+    send_telegram() { :; }
+fi
 
 # 防并发
 LOCK_DIR="${HOME}/.autopilot/locks/claude-${PROJECT_NAME}.lock.d"

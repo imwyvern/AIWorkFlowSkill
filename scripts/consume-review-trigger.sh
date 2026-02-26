@@ -190,6 +190,9 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     review_commit=$(git -C "$project_dir" rev-parse HEAD 2>/dev/null)
     last_review=$(cat "${project_dir}/.last-review-commit" 2>/dev/null || git -C "$project_dir" log -50 --format="%H" 2>/dev/null | tail -1)
     review_output_file="${STATE_DIR}/layer2-review-${safe}.txt"
+    review_retry_file="${STATE_DIR}/review-retry-count-${safe}"
+    review_failed_file="${STATE_DIR}/review-failed-${safe}"
+    reuse_existing_output=false
 
     # 检查是否已有 in-progress review（防重复发送）
     in_progress_file="${STATE_DIR}/review-in-progress-${safe}"
@@ -200,6 +203,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
             if [ -s "$review_output_file" ]; then
                 # 输出文件已有内容，标记完成
                 rm -f "$in_progress_file"
+                reuse_existing_output=true
                 log "✅ ${safe}: review output received after ${ip_age}s"
             else
                 log "⏭ ${safe}: review in-progress (${ip_age}s), waiting for output"
@@ -218,22 +222,23 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         continue
     fi
 
-    # Fix 4: review 最大重试检查
-    review_retry_file="${STATE_DIR}/review-retry-count-${safe}"
-    review_failed_file="${STATE_DIR}/review-failed-${safe}"
+    # Fix 4: review 最大重试检查（已有输出时直接消费，不做重试拦截）
     if [ -f "$review_failed_file" ]; then
         log "⏭ ${safe}: review permanently failed, skip (delete ${review_failed_file} to retry)"
         rm -f "$trigger_file"
         continue
     fi
-    review_retry_count=$(cat "$review_retry_file" 2>/dev/null || echo 0)
-    review_retry_count=$(normalize_int "$review_retry_count")
-    if [ "$review_retry_count" -ge "$MAX_REVIEW_RETRIES" ]; then
-        touch "$review_failed_file"
-        send_telegram "🚨 ${window}: review 连续 ${review_retry_count} 次未完成，已停止自动 review。手动检查后删除 ${review_failed_file} 重新启用。"
-        log "🚨 ${safe}: review exceeded max retries (${review_retry_count}), marking failed"
-        rm -f "$trigger_file"
-        continue
+    review_retry_count=0
+    if [ "$reuse_existing_output" != "true" ]; then
+        review_retry_count=$(cat "$review_retry_file" 2>/dev/null || echo 0)
+        review_retry_count=$(normalize_int "$review_retry_count")
+        if [ "$review_retry_count" -ge "$MAX_REVIEW_RETRIES" ]; then
+            touch "$review_failed_file"
+            send_telegram "🚨 ${window}: review 连续 ${review_retry_count} 次未完成，已停止自动 review。手动检查后删除 ${review_failed_file} 重新启用。"
+            log "🚨 ${safe}: review exceeded max retries (${review_retry_count}), marking failed"
+            rm -f "$trigger_file"
+            continue
+        fi
     fi
 
     # Layer 1: 快速自动扫描
@@ -275,42 +280,46 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     layer2_completed=false
     layer2_issues=""
 
-    if [ -n "$changed_files" ]; then
-        changed_count=$(echo "$changed_files" | wc -l | tr -d ' ')
-        changed_count=$(normalize_int "$changed_count")
-        preview_files=$(echo "$changed_files" | head -n "$LAYER2_FILE_PREVIEW_LIMIT")
-        file_list=$(echo "$preview_files" | tr '\n' ', ' | sed 's/, $//')
-        scope_hint="全量审查范围: git diff ${review_range} --name-only --diff-filter=ACMR（共${changed_count}个文件）"
-        if [ "$changed_count" -gt "$LAYER2_FILE_PREVIEW_LIMIT" ]; then
-            omitted=$((changed_count - LAYER2_FILE_PREVIEW_LIMIT))
-            scope_hint="${scope_hint}；以下仅预览前${LAYER2_FILE_PREVIEW_LIMIT}个: ${file_list} ...(+${omitted} files omitted)"
+    if [ -n "$changed_files" ] || [ "$reuse_existing_output" = "true" ]; then
+        if [ "$reuse_existing_output" != "true" ]; then
+            changed_count=$(echo "$changed_files" | wc -l | tr -d ' ')
+            changed_count=$(normalize_int "$changed_count")
+            preview_files=$(echo "$changed_files" | head -n "$LAYER2_FILE_PREVIEW_LIMIT")
+            file_list=$(echo "$preview_files" | tr '\n' ', ' | sed 's/, $//')
+            scope_hint="全量审查范围: git diff ${review_range} --name-only --diff-filter=ACMR（共${changed_count}个文件）"
+            if [ "$changed_count" -gt "$LAYER2_FILE_PREVIEW_LIMIT" ]; then
+                omitted=$((changed_count - LAYER2_FILE_PREVIEW_LIMIT))
+                scope_hint="${scope_hint}；以下仅预览前${LAYER2_FILE_PREVIEW_LIMIT}个: ${file_list} ...(+${omitted} files omitted)"
+            else
+                scope_hint="${scope_hint}；文件: ${file_list}"
+            fi
+            review_msg="执行增量review(P0-P3)。把结果写入 ${review_output_file}；如果无问题仅写 CLEAN。请按完整范围审查，不要只看预览列表。${scope_hint}"
+
+            if [ ! -x "${SCRIPT_DIR}/tmux-send.sh" ]; then
+                log "⏭ ${safe}: tmux-send.sh missing, keep trigger"
+                continue
+            fi
+
+            rm -f "$review_output_file"
+            if "${SCRIPT_DIR}/tmux-send.sh" "$window" "$review_msg" >/dev/null 2>&1; then
+                touch "$in_progress_file"
+                # Fix 4: 递增重试计数
+                echo $((review_retry_count + 1)) > "$review_retry_file"
+                log "📤 ${safe}: Layer 2 incremental review instruction sent to Codex (attempt $((review_retry_count + 1))/${MAX_REVIEW_RETRIES})"
+            else
+                log "⏭ ${safe}: failed to send Layer 2 instruction, keep trigger"
+                continue
+            fi
+
+            # 不再阻塞等待 — 由 in-progress 机制在下轮检查输出
+            if [ ! -s "$review_output_file" ]; then
+                log "⏭ ${safe}: review sent, waiting for output (in-progress)"
+                continue
+            fi
+            rm -f "$in_progress_file"
         else
-            scope_hint="${scope_hint}；文件: ${file_list}"
+            log "♻️ ${safe}: consuming existing Layer 2 output without re-sending"
         fi
-        review_msg="执行增量review(P0-P3)。把结果写入 ${review_output_file}；如果无问题仅写 CLEAN。请按完整范围审查，不要只看预览列表。${scope_hint}"
-
-        if [ ! -x "${SCRIPT_DIR}/tmux-send.sh" ]; then
-            log "⏭ ${safe}: tmux-send.sh missing, keep trigger"
-            continue
-        fi
-
-        rm -f "$review_output_file"
-        if "${SCRIPT_DIR}/tmux-send.sh" "$window" "$review_msg" >/dev/null 2>&1; then
-            touch "$in_progress_file"
-            # Fix 4: 递增重试计数
-            echo $((review_retry_count + 1)) > "$review_retry_file"
-            log "📤 ${safe}: Layer 2 incremental review instruction sent to Codex (attempt $((review_retry_count + 1))/${MAX_REVIEW_RETRIES})"
-        else
-            log "⏭ ${safe}: failed to send Layer 2 instruction, keep trigger"
-            continue
-        fi
-
-        # 不再阻塞等待 — 由 in-progress 机制在下轮检查输出
-        if [ ! -s "$review_output_file" ]; then
-            log "⏭ ${safe}: review sent, waiting for output (in-progress)"
-            continue
-        fi
-        rm -f "$in_progress_file"
 
         layer2_raw=$(cat "$review_output_file" 2>/dev/null || echo "")
         layer2_raw_flat=$(echo "$layer2_raw" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
