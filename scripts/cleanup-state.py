@@ -114,9 +114,18 @@ def cleanup_state(
 
 
 def save_state(state_path: Path, state: Dict[str, Any]) -> None:
-    with state_path.open("w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
-        f.write("\n")
+    tmp_state_path = state_path.with_name(f"{state_path.name}.tmp")
+    try:
+        with tmp_state_path.open("w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_state_path, state_path)
+    except Exception:
+        if tmp_state_path.exists():
+            tmp_state_path.unlink(missing_ok=True)
+        raise
 
 
 def parse_args() -> argparse.Namespace:

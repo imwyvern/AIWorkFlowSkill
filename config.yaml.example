@@ -41,9 +41,9 @@ telegram:
 # 添加你要自动驾驶的项目路径
 # 这些目录会被扫描，优先使用 ~/.autopilot/projects/{name}/tasks.yaml
 project_dirs:
-  - "~/Shike"
-  - "~/projects/agent-simcity"
-  - "~/replyher_android-2"
+  - "~/your-project-1"
+  - "~/your-project-2"
+  - "~/your-project-3"
   # 以下项目暂不监督，需要时再加回来
   # - "~/autocontent"
   # - "~/SoulKeyboard-Wechat"
@@ -68,7 +68,7 @@ project_dirs:
 # tasks.yaml 示例:
 # project:
 #   name: "Shike"
-#   dir: "~/Shike"
+#   dir: "~/your-project-1"
 #   description: "食客 App"
 #   enabled: true
 #   priority: 1                    # 数字越小优先级越高
