@@ -21,6 +21,7 @@ Codex Autopilot v3 — tmux + CLI 模式
 import hashlib
 import logging
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -499,36 +500,33 @@ def ensure_tmux_sessions(projects, sessions, config):
         setup_tmux_session(tmux_projects, config)
 
 
-def normalize_project_dir(project_dir: str) -> str:
-    """规范化项目目录路径（用于状态去重/清理）"""
-    return os.path.realpath(os.path.expanduser(project_dir.strip()))
+def run_startup_state_cleanup() -> None:
+    """启动时调用 cleanup-state.py，清理 state.json 中的僵尸项目数据。"""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    cleanup_script = os.path.join(base_dir, "scripts", "cleanup-state.py")
+    config_path = os.path.join(base_dir, "config.yaml")
+    state_path = os.path.join(base_dir, "state.json")
 
+    if not os.path.exists(cleanup_script):
+        logger.warning(f"状态清理脚本不存在，跳过: {cleanup_script}")
+        return
 
-def cleanup_stale_project_state(state: GlobalState, config: dict) -> None:
-    """清理不在 config.yaml project_dirs 中的僵尸项目状态"""
-    configured_dirs = config.get('project_dirs', [])
-    if not isinstance(configured_dirs, list) or not configured_dirs:
+    try:
+        result = subprocess.run(
+            [sys.executable, cleanup_script, "--config", config_path, "--state", state_path],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as exc:
+        logger.warning(f"启动状态清理执行失败: {exc}")
         return
-    
-    valid_dirs = {
-        normalize_project_dir(project_dir)
-        for project_dir in configured_dirs
-        if isinstance(project_dir, str) and project_dir.strip()
-    }
-    if not valid_dirs:
-        return
-    
-    stale_dirs = [
-        project_dir
-        for project_dir in list(state.projects.keys())
-        if normalize_project_dir(project_dir) not in valid_dirs
-    ]
-    
-    for project_dir in stale_dirs:
-        del state.projects[project_dir]
-    
-    if stale_dirs:
-        logger.info(f"清理失效项目状态 {len(stale_dirs)} 个: {', '.join(stale_dirs)}")
+
+    if result.stdout and result.stdout.strip():
+        logger.info(result.stdout.strip())
+    if result.returncode != 0:
+        error_detail = result.stderr.strip() if result.stderr else f"exit={result.returncode}"
+        logger.warning(f"启动状态清理失败: {error_detail}")
 
 
 def main():
@@ -550,9 +548,9 @@ def main():
     if not config:
         logger.error("无法加载配置")
         return
-    
+
+    run_startup_state_cleanup()
     state = load_state()
-    cleanup_stale_project_state(state, config)
     state.last_tick_at = datetime.now().isoformat()
     if not state.started_at:
         state.started_at = datetime.now().isoformat()

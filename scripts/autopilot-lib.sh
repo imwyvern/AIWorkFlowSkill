@@ -19,6 +19,13 @@
 [ -n "${_AUTOPILOT_LIB_LOADED:-}" ] && return 0
 _AUTOPILOT_LIB_LOADED=1
 
+# Source shared constants (状态常量等)
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${_LIB_DIR}/autopilot-constants.sh" ]; then
+    # shellcheck source=autopilot-constants.sh
+    source "${_LIB_DIR}/autopilot-constants.sh"
+fi
+
 normalize_int() {
     local val
     val=$(echo "${1:-}" | tr -dc '0-9')
