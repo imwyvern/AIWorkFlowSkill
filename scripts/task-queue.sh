@@ -58,10 +58,13 @@ cmd_add() {
 
     if [ "$priority" = "high" ]; then
         # 高优先级: 插入到第一个 [ ] 之前（python 处理，避免 sed UTF-8 问题）
-        python3 << PYEOF
-f = "$file"
-entry = "$entry"
-lines = open(f).readlines()
+        python3 - "$file" "$entry" <<'PYEOF'
+import pathlib
+import sys
+
+f = pathlib.Path(sys.argv[1])
+entry = sys.argv[2]
+lines = f.read_text(encoding="utf-8").splitlines(keepends=True)
 inserted = False
 for i, line in enumerate(lines):
     if line.startswith("- [ ]"):
@@ -70,7 +73,7 @@ for i, line in enumerate(lines):
         break
 if not inserted:
     lines.append(entry + "\n")
-open(f, "w").writelines(lines)
+f.write_text("".join(lines), encoding="utf-8")
 PYEOF
     else
         echo "$entry" >> "$file"
