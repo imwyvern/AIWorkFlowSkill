@@ -99,9 +99,25 @@ if ! "$TMUX" list-windows -t "$SESSION" -F '#{window_name}' | grep -qx "$WINDOW"
     exit 1
 fi
 
-PANE_CMD=$("$TMUX" list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_current_command}' | head -1)
-if [[ "$PANE_CMD" == "bash" || "$PANE_CMD" == "zsh" || "$PANE_CMD" == "sh" || "$PANE_CMD" == "fish" ]]; then
-    echo "ERROR: window '$WINDOW' 中 codex 未运行 (当前: $PANE_CMD)，跳过发送" >&2
+# ---- 检测 codex 是否在运行（子进程树检查，非 pane_current_command）----
+PANE_PID=$("$TMUX" list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_pid}' | head -1)
+_tmux_send_has_codex() {
+    local pid="$1" children cpid cmd grandchildren gpid gcmd
+    children=$(pgrep -P "$pid" 2>/dev/null || true)
+    [ -z "$children" ] && return 1
+    for cpid in $children; do
+        cmd=$(ps -p "$cpid" -o comm= 2>/dev/null || true)
+        [[ "$cmd" == *codex* || "$cmd" == "node" ]] && return 0
+        grandchildren=$(pgrep -P "$cpid" 2>/dev/null || true)
+        for gpid in $grandchildren; do
+            gcmd=$(ps -p "$gpid" -o comm= 2>/dev/null || true)
+            [[ "$gcmd" == *codex* || "$gcmd" == "node" ]] && return 0
+        done
+    done
+    return 1
+}
+if [ -n "$PANE_PID" ] && ! _tmux_send_has_codex "$PANE_PID"; then
+    echo "ERROR: window '$WINDOW' 中 codex 未运行 (pane PID $PANE_PID 子进程树无 codex)，跳过发送" >&2
     exit 2
 fi
 

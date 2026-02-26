@@ -12,7 +12,7 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 3
 fi
 
-TMUX="/opt/homebrew/bin/tmux"
+TMUX="${TMUX_BIN:-$(command -v tmux || echo /opt/homebrew/bin/tmux)}"
 SESSION="autopilot"
 WINDOW="${1:?用法: codex-status.sh <window>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -62,11 +62,47 @@ if ! "$TMUX" list-windows -t "$SESSION" -F '#{window_name}' | grep -qFx "$WINDOW
     exit 3
 fi
 
-PANE_CMD=$("$TMUX" list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_current_command}' | head -1)
+# ---- Shell 检测: 用子进程树替代 pane_current_command ----
+# pane_current_command 只报告 tmux pane 的顶层进程（总是 zsh），
+# 但 Codex 作为 zsh 的子进程运行: zsh → zsh → node → codex
+# 所以改为检查 pane PID 的子进程树中是否有 codex/node 进程
+PANE_PID=$("$TMUX" list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_pid}' | head -1)
 
-if [[ "$PANE_CMD" == "bash" || "$PANE_CMD" == "zsh" || "$PANE_CMD" == "sh" || "$PANE_CMD" == "fish" ]]; then
-    echo "{\"status\":\"${CODEX_STATE_SHELL}\",\"detail\":\"pane running $PANE_CMD\"}"
-    exit 2
+_has_codex_child() {
+    # 检查 pane_pid 子进程树中是否存在 codex 相关进程
+    # pgrep -P 只查直接子进程，所以递归查 2 层
+    local pid="$1"
+    local children
+    children=$(pgrep -P "$pid" 2>/dev/null || true)
+    [ -z "$children" ] && return 1
+    for cpid in $children; do
+        local cmd
+        cmd=$(ps -p "$cpid" -o comm= 2>/dev/null || true)
+        # codex binary 名为 codex 或通过 node 运行
+        if [[ "$cmd" == *codex* || "$cmd" == "node" ]]; then
+            return 0
+        fi
+        # 递归查孙进程
+        local grandchildren
+        grandchildren=$(pgrep -P "$cpid" 2>/dev/null || true)
+        for gpid in $grandchildren; do
+            local gcmd
+            gcmd=$(ps -p "$gpid" -o comm= 2>/dev/null || true)
+            if [[ "$gcmd" == *codex* || "$gcmd" == "node" ]]; then
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+
+if [ -n "$PANE_PID" ] && ! _has_codex_child "$PANE_PID"; then
+    # 子进程树中没有 codex — 再 double-check pane 内容是否有 TUI 特征
+    PANE_PEEK=$("$TMUX" capture-pane -t "${SESSION}:${WINDOW}" -p -S -5 2>&1 || true)
+    if ! echo "$PANE_PEEK" | grep -qE "context left|esc to interrupt|esc to cancel|›"; then
+        echo "{\"status\":\"${CODEX_STATE_SHELL}\",\"detail\":\"no codex process in pane $PANE_PID subtree\"}"
+        exit 2
+    fi
 fi
 
 # ---- 捕获 pane 输出 ----
