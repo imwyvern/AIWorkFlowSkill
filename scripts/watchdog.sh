@@ -383,6 +383,7 @@ derive_window_name_from_path() {
 project_window_exists() {
     local needle="$1"
     local entry
+    [[ ${#PROJECTS[@]:-0} -eq 0 ]] && return 1
     for entry in "${PROJECTS[@]}"; do
         if [ "${entry%%:*}" = "$needle" ]; then
             return 0
