@@ -294,17 +294,131 @@ parse_projects_from_config_yaml() {
     ' "$config_file"
 }
 
+parse_project_dirs_from_config_yaml() {
+    local config_file="$1"
+    [ -f "$config_file" ] || return 1
+
+    awk '
+    function ltrim(s) { sub(/^[[:space:]]+/, "", s); return s }
+    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
+    function trim(s) { return rtrim(ltrim(s)) }
+    function strip_quotes(s) {
+        s = trim(s)
+        if (s ~ /^".*"$/) return substr(s, 2, length(s) - 2)
+        if (s ~ /^'\''.*'\''$/) return substr(s, 2, length(s) - 2)
+        return s
+    }
+    function strip_inline_comment(s, out, i, ch, in_double, in_single) {
+        out = ""
+        in_double = 0
+        in_single = 0
+        for (i = 1; i <= length(s); i++) {
+            ch = substr(s, i, 1)
+            if (ch == "\"" && in_single == 0) {
+                in_double = !in_double
+            } else if (ch == "'\''" && in_double == 0) {
+                in_single = !in_single
+            } else if (ch == "#" && in_double == 0 && in_single == 0) {
+                break
+            }
+            out = out ch
+        }
+        return out
+    }
+    BEGIN {
+        in_dirs = 0
+        dirs_indent = -1
+        parsed_count = 0
+    }
+    {
+        line = $0
+        sub(/\r$/, "", line)
+
+        if (in_dirs == 0) {
+            if (line ~ /^[[:space:]]*project_dirs:[[:space:]]*($|#)/) {
+                in_dirs = 1
+                match(line, /^[[:space:]]*/)
+                dirs_indent = RLENGTH
+            }
+            next
+        }
+
+        if (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/) next
+
+        match(line, /^[[:space:]]*/)
+        indent = RLENGTH
+        if (indent <= dirs_indent) {
+            in_dirs = 0
+            next
+        }
+
+        content = trim(strip_inline_comment(substr(line, indent + 1)))
+        if (content == "") next
+        if (content !~ /^-[[:space:]]*/) next
+
+        value = trim(substr(content, 2))
+        value = strip_quotes(strip_inline_comment(value))
+        if (value == "") next
+
+        print value
+        parsed_count++
+    }
+    END {
+        if (parsed_count == 0) exit 10
+    }
+    ' "$config_file"
+}
+
+derive_window_name_from_path() {
+    local dir="$1"
+    dir="${dir%/}"
+    local window
+    window=$(basename "$dir" 2>/dev/null || echo "")
+    [ -n "$window" ] || window="project"
+    window=$(printf '%s' "$window" | sed 's/[[:space:]]\+/-/g; s/:/-/g')
+    [ -n "$window" ] || window="project"
+    echo "$window"
+}
+
+project_window_exists() {
+    local needle="$1"
+    local entry
+    for entry in "${PROJECTS[@]}"; do
+        if [ "${entry%%:*}" = "$needle" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 load_projects_from_config_yaml() {
-    local parsed_lines line window dir
-    parsed_lines=$(parse_projects_from_config_yaml "$CONFIG_YAML_FILE" 2>/dev/null) || return 1
+    local parsed_lines line window dir parse_mode
+    parse_mode="projects"
+    parsed_lines=$(parse_projects_from_config_yaml "$CONFIG_YAML_FILE" 2>/dev/null) || {
+        parse_mode="project_dirs"
+        parsed_lines=$(parse_project_dirs_from_config_yaml "$CONFIG_YAML_FILE" 2>/dev/null) || return 1
+    }
     [ -n "$parsed_lines" ] || return 1
 
     while IFS= read -r line || [ -n "$line" ]; do
         line="${line%$'\r'}"
         [ -z "$line" ] && continue
-        window="${line%%:*}"
-        dir="${line#*:}"
-        [ "$dir" = "$line" ] && continue
+        if [ "$parse_mode" = "projects" ]; then
+            window="${line%%:*}"
+            dir="${line#*:}"
+            [ "$dir" = "$line" ] && continue
+        else
+            dir="$line"
+            window=$(derive_window_name_from_path "$dir")
+            if project_window_exists "$window"; then
+                local n=2
+                local base_window="$window"
+                while project_window_exists "${base_window}-${n}"; do
+                    n=$((n + 1))
+                done
+                window="${base_window}-${n}"
+            fi
+        fi
         [ -z "$window" ] && continue
         [ -z "$dir" ] && continue
         PROJECTS+=("${window}:${dir}")
@@ -342,7 +456,7 @@ load_projects() {
     PROJECTS=()
 
     if load_projects_from_config_yaml; then
-        log "📁 loaded ${#PROJECTS[@]} projects from config.yaml projects"
+        log "📁 loaded ${#PROJECTS[@]} projects from config.yaml"
         return
     fi
 
@@ -600,21 +714,32 @@ get_idle_seconds() {
 
 reset_idle_probe() {
     local safe="$1"
-    echo 0 > "${ACTIVITY_DIR}/idle-probe-${safe}"
+    echo 0 > "${ACTIVITY_DIR}/idle-probe-${safe}-${CODEX_STATE_IDLE}"
+    echo 0 > "${ACTIVITY_DIR}/idle-probe-${safe}-${CODEX_STATE_IDLE_LOW_CONTEXT}"
+    rm -f "${ACTIVITY_DIR}/idle-probe-${safe}" 2>/dev/null || true
 }
 
 # 连续确认 + working 惯性，避免快照抖动误判 idle
 idle_state_confirmed() {
     local safe="$1"
-    local probe_file="${ACTIVITY_DIR}/idle-probe-${safe}"
+    local state_key="${2:-$CODEX_STATE_IDLE}"
+    local probe_file="${ACTIVITY_DIR}/idle-probe-${safe}-${state_key}"
+    local other_probe_file=""
+    if [ "$state_key" = "$CODEX_STATE_IDLE" ]; then
+        other_probe_file="${ACTIVITY_DIR}/idle-probe-${safe}-${CODEX_STATE_IDLE_LOW_CONTEXT}"
+    elif [ "$state_key" = "$CODEX_STATE_IDLE_LOW_CONTEXT" ]; then
+        other_probe_file="${ACTIVITY_DIR}/idle-probe-${safe}-${CODEX_STATE_IDLE}"
+    fi
     local probe_count idle_secs
 
     idle_secs=$(get_idle_seconds "$safe")
     if [ "$idle_secs" -lt "$WORKING_INERTIA_SECONDS" ]; then
         echo 0 > "$probe_file"
+        [ -n "$other_probe_file" ] && echo 0 > "$other_probe_file"
         return 1
     fi
 
+    [ -n "$other_probe_file" ] && echo 0 > "$other_probe_file"
     probe_count=$(cat "$probe_file" 2>/dev/null || echo 0)
     probe_count=$(normalize_int "$probe_count")
     probe_count=$((probe_count + 1))
@@ -748,7 +873,6 @@ handle_idle() {
         local manual_age=$(( $(now_ts) - manual_ts ))
         if [ "$manual_age" -lt 300 ]; then
             log "⏭ ${window}: manual task sent ${manual_age}s ago, skipping nudge (protect 300s)"
-            release_lock "$safe" 2>/dev/null || true
             return
         else
             rm -f "$manual_task_file"
@@ -1107,13 +1231,15 @@ check_new_commits() {
 
     # 队列任务完成检测：如果有进行中的队列任务，新 commit = 任务完成
     local queue_in_progress
-    queue_in_progress=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${safe}.md" 2>/dev/null || echo 0)
+    queue_in_progress=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${safe}.md" 2>/dev/null || true)
+    queue_in_progress=$(normalize_int "$queue_in_progress")
     if [ "$queue_in_progress" -gt 0 ]; then
         "${SCRIPT_DIR}/task-queue.sh" done "$safe" "${current_head:0:7}" 2>/dev/null || true
         log "📋✅ ${window}: queue task completed (commit ${current_head:0:7})"
         # 检查是否还有更多队列任务
         local remaining
         remaining=$("${SCRIPT_DIR}/task-queue.sh" count "$safe" 2>/dev/null || echo 0)
+        remaining=$(normalize_int "$remaining")
         if [ "$remaining" -gt 0 ]; then
             log "📋 ${window}: ${remaining} more tasks in queue"
         fi
@@ -1232,23 +1358,32 @@ run_prd_checks_for_commit() {
     changed_files=$(echo "$changed_files" | sed '/^$/d')
     [ -z "$changed_files" ] && return
 
-    local changed_files_json
-    changed_files_json=$(printf '%s\n' "$changed_files" | python3 -c 'import json,sys; print(json.dumps([line.rstrip("\n") for line in sys.stdin if line.rstrip("\n")], ensure_ascii=False))' 2>/dev/null || echo "[]")
-    local verify_output rc
-    verify_output=$(run_with_timeout 45 "${verify_cmd[@]}" --changed-files "$changed_files_json" --output "$output_file" --sync-todo --print-failures-only 2>&1)
-    rc=$?
-
-    if [ "$rc" -eq 0 ]; then
-        rm -f "$issues_file"
-        log "✅ ${window}: PRD verify passed for ${current_head:0:7}"
-        sync_project_status "$project_dir" "prd_verify_pass" "window=${window}" "state=working" "head=${current_head}"
+    local check_lock="${LOCK_DIR}/prdcheck-${safe}.lock.d"
+    if ! mkdir "$check_lock" 2>/dev/null; then
+        log "⏭ ${window}: PRD check already running, skip ${current_head:0:7}"
         return
     fi
 
-    verify_output=$(echo "$verify_output" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
-    echo "$verify_output" > "${issues_file}.tmp" && mv -f "${issues_file}.tmp" "$issues_file"
-    log "⚠️ ${window}: PRD verify failed — ${verify_output:0:200}"
-    sync_project_status "$project_dir" "prd_verify_fail" "window=${window}" "state=working" "head=${current_head}" "issues=${verify_output:0:220}"
+    (
+        trap 'rm -rf "'"$check_lock"'"' EXIT
+        local changed_files_json
+        changed_files_json=$(printf '%s\n' "$changed_files" | python3 -c 'import json,sys; print(json.dumps([line.rstrip("\n") for line in sys.stdin if line.rstrip("\n")], ensure_ascii=False))' 2>/dev/null || echo "[]")
+        local verify_output rc
+        verify_output=$(run_with_timeout 45 "${verify_cmd[@]}" --changed-files "$changed_files_json" --output "$output_file" --sync-todo --print-failures-only 2>&1)
+        rc=$?
+
+        if [ "$rc" -eq 0 ]; then
+            rm -f "$issues_file"
+            log "✅ ${window}: PRD verify passed for ${current_head:0:7}"
+            sync_project_status "$project_dir" "prd_verify_pass" "window=${window}" "state=working" "head=${current_head}"
+            exit 0
+        fi
+
+        verify_output=$(echo "$verify_output" | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//')
+        echo "$verify_output" > "${issues_file}.tmp" && mv -f "${issues_file}.tmp" "$issues_file"
+        log "⚠️ ${window}: PRD verify failed — ${verify_output:0:200}"
+        sync_project_status "$project_dir" "prd_verify_fail" "window=${window}" "state=working" "head=${current_head}" "issues=${verify_output:0:220}"
+    ) &
 }
 
 # Layer 2 增量 review 触发
@@ -1543,12 +1678,12 @@ while true; do
                 handle_permission "$window" "$safe"
                 ;;
             "$CODEX_STATE_IDLE")
-                if idle_state_confirmed "$safe"; then
+                if idle_state_confirmed "$safe" "$CODEX_STATE_IDLE"; then
                     handle_idle "$window" "$safe" "$project_dir"
                 fi
                 ;;
             "$CODEX_STATE_IDLE_LOW_CONTEXT")
-                if idle_state_confirmed "$safe"; then
+                if idle_state_confirmed "$safe" "$CODEX_STATE_IDLE_LOW_CONTEXT"; then
                     handle_low_context "$window" "$safe" "$project_dir"
                 fi
                 ;;

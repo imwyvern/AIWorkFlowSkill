@@ -32,6 +32,7 @@ CHUNK_DELAY=0.2         # 块间延迟（秒）— 200ms 防 TUI 乱码
 VERIFY_WAIT=0.5         # 发送后等待验证的时间（秒）
 VERIFY_PREFIX_LEN=20    # 验证时取消息前 N 字符匹配
 MAX_RETRIES=2           # 最大重试次数（含降级）
+PRE_SEND_PANE=""
 
 log() {
     echo "[tmux-send $(date '+%H:%M:%S')] $*" >&2
@@ -121,6 +122,10 @@ if [ -n "$PANE_PID" ] && ! _tmux_send_has_codex "$PANE_PID"; then
     exit 2
 fi
 
+capture_pre_send_snapshot() {
+    PRE_SEND_PANE=$("$TMUX" capture-pane -t "${SESSION}:${WINDOW}" -p 2>/dev/null | tail -8)
+}
+
 # ---- 消息预处理 ----
 SINGLE_LINE=$(echo "$MESSAGE" | tr '\n' ' ' | tr '\r' ' ' | sed 's/  */ /g; s/^ *//; s/ *$//')
 MSG_LEN=${#SINGLE_LINE}
@@ -151,9 +156,14 @@ verify_message_received() {
             return 0
         fi
         
-        # 检查 3: prompt 变化（新的 › 行不包含旧消息 = 消息已被处理完毕）
-        # 这种情况是快速处理完成
-        if echo "$pane_content" | grep -E '^\s*›' | grep -qvF "$prefix" 2>/dev/null; then
+        # 检查 3: prompt 变化（需要与发送前快照不同，避免空 › 行误判）
+        local prompt_line pre_prompt_line
+        prompt_line=$(echo "$pane_content" | grep -E '^[[:space:]]*›' | tail -1 || true)
+        pre_prompt_line=$(echo "$PRE_SEND_PANE" | grep -E '^[[:space:]]*›' | tail -1 || true)
+        if [ -n "$prompt_line" ] \
+            && [ "$pane_content" != "$PRE_SEND_PANE" ] \
+            && [ "$prompt_line" != "$pre_prompt_line" ] \
+            && ! echo "$prompt_line" | grep -qF "$prefix"; then
             return 0
         fi
     done
@@ -164,6 +174,7 @@ verify_message_received() {
 # ---- Level 1: send-keys 直发 ----
 send_direct() {
     log "Level 1: send-keys 直发 (${MSG_LEN} 字符)"
+    capture_pre_send_snapshot
     "$TMUX" send-keys -t "${SESSION}:${WINDOW}" -l "$SINGLE_LINE"
     sleep 0.2
     "$TMUX" send-keys -t "${SESSION}:${WINDOW}" Enter
@@ -172,6 +183,7 @@ send_direct() {
 # ---- Level 2: 分块 send-keys ----
 send_chunked() {
     log "Level 2: 分块 send-keys (${MSG_LEN} 字符, 块大小 ${CHUNK_SIZE})"
+    capture_pre_send_snapshot
     local offset=0
     local remaining="$MSG_LEN"
     
@@ -193,6 +205,7 @@ send_chunked() {
 # ---- Level 3: paste-buffer (bracketed paste mode) ----
 send_paste_buffer() {
     log "Level 3: paste-buffer -p bracketed paste (${MSG_LEN} 字符)"
+    capture_pre_send_snapshot
     TMPFILE=$(mktemp /tmp/tmux-paste.XXXXXX)
     printf '%s' "$SINGLE_LINE" > "$TMPFILE"
     
