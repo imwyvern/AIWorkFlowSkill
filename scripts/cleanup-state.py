@@ -2,7 +2,7 @@
 """
 cleanup-state.py
 
-根据 config.yaml 的 project_dirs 清理 state.json 中的僵尸项目数据。
+根据 config.yaml 的 project_dirs / projects 清理 state.json 中的僵尸项目数据。
 """
 
 from __future__ import annotations
@@ -42,17 +42,74 @@ def load_state(state_path: Path) -> Dict[str, Any]:
     return data
 
 
-def collect_valid_projects(config: Dict[str, Any]) -> Tuple[Set[str], Set[str]]:
-    configured_dirs = config.get("project_dirs", [])
-    if not isinstance(configured_dirs, list):
-        return set(), set()
+def _basename_from_dir(project_dir: str) -> str:
+    normalized = project_dir.rstrip(os.sep)
+    return os.path.basename(normalized)
 
-    valid_dirs = {
+
+def _collect_dirs_from_project_dirs(config: Dict[str, Any]) -> Set[str]:
+    configured_dirs = config.get("project_dirs", [])
+    if isinstance(configured_dirs, str):
+        configured_dirs = [configured_dirs]
+    if not isinstance(configured_dirs, list):
+        return set()
+
+    return {
         normalize_project_dir(project_dir)
         for project_dir in configured_dirs
         if isinstance(project_dir, str) and project_dir.strip()
     }
-    valid_names = {os.path.basename(project_dir) for project_dir in valid_dirs}
+
+
+def _collect_from_projects_section(config: Dict[str, Any]) -> Tuple[Set[str], Set[str]]:
+    projects = config.get("projects")
+    valid_dirs: Set[str] = set()
+    valid_names: Set[str] = set()
+
+    def add_dir(value: Any) -> None:
+        if isinstance(value, str) and value.strip():
+            normalized = normalize_project_dir(value)
+            valid_dirs.add(normalized)
+            base = _basename_from_dir(normalized)
+            if base:
+                valid_names.add(base)
+
+    def add_name(value: Any) -> None:
+        if isinstance(value, str) and value.strip():
+            valid_names.add(value.strip())
+
+    if isinstance(projects, dict):
+        for project_key, project_value in projects.items():
+            add_name(project_key)
+            if isinstance(project_value, dict):
+                add_name(project_value.get("window"))
+                add_name(project_value.get("name"))
+                add_dir(project_value.get("dir"))
+                add_dir(project_value.get("project_dir"))
+                add_dir(project_value.get("path"))
+            else:
+                add_dir(project_value)
+    elif isinstance(projects, list):
+        for project_item in projects:
+            if isinstance(project_item, dict):
+                add_name(project_item.get("window"))
+                add_name(project_item.get("name"))
+                add_dir(project_item.get("dir"))
+                add_dir(project_item.get("project_dir"))
+                add_dir(project_item.get("path"))
+            else:
+                add_dir(project_item)
+
+    return valid_dirs, valid_names
+
+
+def collect_valid_projects(config: Dict[str, Any]) -> Tuple[Set[str], Set[str]]:
+    valid_dirs = _collect_dirs_from_project_dirs(config)
+    project_dirs, project_names = _collect_from_projects_section(config)
+    valid_dirs.update(project_dirs)
+
+    valid_names = {_basename_from_dir(project_dir) for project_dir in valid_dirs if _basename_from_dir(project_dir)}
+    valid_names.update(project_names)
     return valid_dirs, valid_names
 
 
@@ -132,7 +189,7 @@ def parse_args() -> argparse.Namespace:
     script_dir = Path(__file__).resolve().parent
     root_dir = script_dir.parent
     parser = argparse.ArgumentParser(
-        description="清理 state.json 中不在 config.yaml project_dirs 的项目数据"
+        description="清理 state.json 中不在 config.yaml project_dirs/projects 的项目数据"
     )
     parser.add_argument(
         "--config",
@@ -161,7 +218,7 @@ def main() -> int:
 
     valid_dirs, valid_names = collect_valid_projects(config)
     if not valid_dirs:
-        print("cleanup-state: 未发现有效 project_dirs，跳过清理")
+        print("cleanup-state: 未发现有效 project_dirs/projects，跳过清理")
         return 0
 
     removed = cleanup_state(state, valid_dirs, valid_names)

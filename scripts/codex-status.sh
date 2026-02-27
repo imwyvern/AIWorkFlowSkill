@@ -69,27 +69,31 @@ fi
 PANE_PID=$("$TMUX" list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_pid}' | head -1)
 
 _has_codex_child() {
-    # 检查 pane_pid 子进程树中是否存在 codex 相关进程
-    # pgrep -P 只查直接子进程，所以递归查 2 层
-    local pid="$1"
-    local children
-    children=$(pgrep -P "$pid" 2>/dev/null || true)
-    [ -z "$children" ] && return 1
-    for cpid in $children; do
-        local cmd
-        cmd=$(ps -p "$cpid" -o comm= 2>/dev/null || true)
-        # codex binary 名为 codex 或通过 node 运行
-        if [[ "$cmd" == *codex* || "$cmd" == "node" ]]; then
-            return 0
+    # 检查 pane_pid 全量子进程树，避免深层 zsh/node/codex 链路漏检
+    local root_pid="$1"
+    local queue="$root_pid"
+    local current_pid children cpid cmd
+
+    while [ -n "$queue" ]; do
+        current_pid="${queue%% *}"
+        if [ "$queue" = "$current_pid" ]; then
+            queue=""
+        else
+            queue="${queue#* }"
         fi
-        # 递归查孙进程
-        local grandchildren
-        grandchildren=$(pgrep -P "$cpid" 2>/dev/null || true)
-        for gpid in $grandchildren; do
-            local gcmd
-            gcmd=$(ps -p "$gpid" -o comm= 2>/dev/null || true)
-            if [[ "$gcmd" == *codex* || "$gcmd" == "node" ]]; then
+
+        children=$(pgrep -P "$current_pid" 2>/dev/null || true)
+        [ -z "$children" ] && continue
+        for cpid in $children; do
+            cmd=$(ps -p "$cpid" -o comm= 2>/dev/null || true)
+            # codex binary 名为 codex 或通过 node 运行
+            if [[ "$cmd" == *codex* || "$cmd" == "node" ]]; then
                 return 0
+            fi
+            if [ -z "$queue" ]; then
+                queue="$cpid"
+            else
+                queue="${queue} ${cpid}"
             fi
         done
     done
@@ -116,9 +120,10 @@ if ! [[ "$CONTEXT_NUM" =~ ^[0-9]+$ ]]; then
     CONTEXT_NUM=-1
 fi
 
-WEEKLY_LIMIT_LINE=$(echo "$PANE" | grep -iE 'weekly limit' | head -1 || true)
+# Weekly limit 文案会随 TUI 版本变动，做多模式匹配并取最后一条
+WEEKLY_LIMIT_LINE=$(echo "$PANE" | grep -iE 'weekly[[:space:]_-]*(limit|usage|quota)|((limit|usage|quota)[[:space:]_-]*weekly)' | tail -1 || true)
 if [ -n "$WEEKLY_LIMIT_LINE" ]; then
-    LIMIT_PCT=$(echo "$WEEKLY_LIMIT_LINE" | grep -oE '[0-9]{1,3}%' | head -1 | tr -d '%')
+    LIMIT_PCT=$(echo "$WEEKLY_LIMIT_LINE" | grep -oE '[0-9]{1,3}[[:space:]]*%' | tail -1 | tr -dc '0-9')
     if [[ "$LIMIT_PCT" =~ ^[0-9]+$ ]]; then
         WEEKLY_LIMIT_PCT="$LIMIT_PCT"
     fi
