@@ -175,7 +175,7 @@ verify_message_received() {
 send_direct() {
     log "Level 1: send-keys 直发 (${MSG_LEN} 字符)"
     capture_pre_send_snapshot
-    "$TMUX" send-keys -t "${SESSION}:${WINDOW}" -l "$SINGLE_LINE"
+    "$TMUX" send-keys -t "${SESSION}:${WINDOW}" -l -- "$SINGLE_LINE"
     sleep 0.2
     "$TMUX" send-keys -t "${SESSION}:${WINDOW}" Enter
 }
@@ -189,7 +189,7 @@ send_chunked() {
     
     while [ "$offset" -lt "$MSG_LEN" ]; do
         local chunk="${SINGLE_LINE:$offset:$CHUNK_SIZE}"
-        "$TMUX" send-keys -t "${SESSION}:${WINDOW}" -l "$chunk"
+        "$TMUX" send-keys -t "${SESSION}:${WINDOW}" -l -- "$chunk"
         offset=$((offset + CHUNK_SIZE))
         
         # 块间延迟，让 TUI 有时间处理输入缓冲
