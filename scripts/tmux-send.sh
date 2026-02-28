@@ -103,16 +103,31 @@ fi
 # ---- 检测 codex 是否在运行（子进程树检查，非 pane_current_command）----
 PANE_PID=$("$TMUX" list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_pid}' | head -1)
 _tmux_send_has_codex() {
-    local pid="$1" children cpid cmd grandchildren gpid gcmd
-    children=$(pgrep -P "$pid" 2>/dev/null || true)
-    [ -z "$children" ] && return 1
-    for cpid in $children; do
-        cmd=$(ps -p "$cpid" -o comm= 2>/dev/null || true)
-        [[ "$cmd" == *codex* || "$cmd" == "node" ]] && return 0
-        grandchildren=$(pgrep -P "$cpid" 2>/dev/null || true)
-        for gpid in $grandchildren; do
-            gcmd=$(ps -p "$gpid" -o comm= 2>/dev/null || true)
-            [[ "$gcmd" == *codex* || "$gcmd" == "node" ]] && return 0
+    # BFS 全量子进程树搜索（与 codex-status.sh 一致）
+    local root_pid="$1"
+    local queue="$root_pid"
+    local current_pid children cpid cmd
+
+    while [ -n "$queue" ]; do
+        current_pid="${queue%% *}"
+        if [ "$queue" = "$current_pid" ]; then
+            queue=""
+        else
+            queue="${queue#* }"
+        fi
+
+        children=$(pgrep -P "$current_pid" 2>/dev/null || true)
+        [ -z "$children" ] && continue
+        for cpid in $children; do
+            cmd=$(ps -p "$cpid" -o comm= 2>/dev/null || true)
+            if [[ "$cmd" == *codex* || "$cmd" == "node" ]]; then
+                return 0
+            fi
+            if [ -z "$queue" ]; then
+                queue="$cpid"
+            else
+                queue="${queue} ${cpid}"
+            fi
         done
     done
     return 1

@@ -5,8 +5,25 @@
 
 set -euo pipefail
 
-PROJECT_DIR="${1:?Usage: auto-check.sh <project_dir> [--nudge]}"
-NUDGE="${2:-}"
+PROJECT_DIR="${1:?Usage: auto-check.sh <project_dir> [--nudge] [--issues-only]}"
+shift || true
+NUDGE=false
+ISSUES_ONLY=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --nudge)
+            NUDGE=true
+            ;;
+        --issues-only)
+            ISSUES_ONLY=true
+            ;;
+        *)
+            echo "Usage: auto-check.sh <project_dir> [--nudge] [--issues-only]" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
 TMUX="/opt/homebrew/bin/tmux"
 FINDINGS=""
 
@@ -71,10 +88,14 @@ fi
 
 # --- Output ---
 if [ -n "$FINDINGS" ]; then
-    echo -e "⚠️ [$PROJECT_NAME] Auto-check findings:\n$FINDINGS"
+    if [ "$ISSUES_ONLY" = "true" ]; then
+        printf '%b\n' "$FINDINGS"
+    else
+        echo -e "⚠️ [$PROJECT_NAME] Auto-check findings:\n$FINDINGS"
+    fi
 
     # Optionally nudge Codex to fix
-    if [ "$NUDGE" = "--nudge" ]; then
+    if [ "$NUDGE" = "true" ]; then
         SAFE_NAME=$(echo "$PROJECT_NAME" | tr -c 'a-zA-Z0-9_-' '_')
         WINDOW="autopilot:${SAFE_NAME}"
 
@@ -88,6 +109,8 @@ if [ -n "$FINDINGS" ]; then
     fi
     exit 1
 else
-    echo "✅ [$PROJECT_NAME] Auto-check clean"
+    if [ "$ISSUES_ONLY" != "true" ]; then
+        echo "✅ [$PROJECT_NAME] Auto-check clean"
+    fi
     exit 0
 fi
