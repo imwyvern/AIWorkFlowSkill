@@ -315,10 +315,10 @@ autopilot_load_projects_entries() {
             else
                 dir="$line"
                 window=$(autopilot_derive_window_name_from_path "$dir")
-                if _autopilot_project_window_exists "$window" "${projects[@]}"; then
+                if [ "${#projects[@]}" -gt 0 ] && _autopilot_project_window_exists "$window" "${projects[@]}"; then
                     local suffix=2
                     local base_window="$window"
-                    while _autopilot_project_window_exists "${base_window}-${suffix}" "${projects[@]}"; do
+                    while [ "${#projects[@]}" -gt 0 ] && _autopilot_project_window_exists "${base_window}-${suffix}" "${projects[@]}"; do
                         suffix=$((suffix + 1))
                     done
                     window="${base_window}-${suffix}"
