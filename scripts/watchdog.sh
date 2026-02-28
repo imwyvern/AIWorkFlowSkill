@@ -32,23 +32,11 @@ fi
 
 # ---- 时间参数 ----
 TICK=10                   # 主循环间隔（秒）
-IDLE_THRESHOLD="${IDLE_THRESHOLD:-300}"              # idle 超过多久触发 nudge（秒）
-IDLE_CONFIRM_PROBES="${IDLE_CONFIRM_PROBES:-3}"      # 连续多少次 idle 才确认空闲
-WORKING_INERTIA_SECONDS="${WORKING_INERTIA_SECONDS:-90}" # 最近 working 的惯性窗口（秒）
 NUDGE_COOLDOWN=300        # 同一窗口 nudge 冷却（秒），防止反复骚扰
-NUDGE_MAX_RETRY="${NUDGE_MAX_RETRY:-5}"      # 连续无响应 nudge 上限
-NUDGE_PAUSE_SECONDS="${NUDGE_PAUSE_SECONDS:-1800}" # 达到上限后暂停时长（秒）
 PERMISSION_COOLDOWN=60    # 权限 approve 冷却（秒）
 COMPACT_COOLDOWN=600      # compact 冷却（秒）
 SHELL_COOLDOWN=300        # shell 恢复冷却（秒）
 LOW_CONTEXT_THRESHOLD="${LOW_CONTEXT_THRESHOLD:-25}"
-CODEX_STATE_WORKING="${CODEX_STATE_WORKING:-working}"
-CODEX_STATE_IDLE="${CODEX_STATE_IDLE:-idle}"
-CODEX_STATE_IDLE_LOW_CONTEXT="${CODEX_STATE_IDLE_LOW_CONTEXT:-idle_low_context}"
-CODEX_STATE_PERMISSION="${CODEX_STATE_PERMISSION:-permission}"
-CODEX_STATE_PERMISSION_WITH_REMEMBER="${CODEX_STATE_PERMISSION_WITH_REMEMBER:-permission_with_remember}"
-CODEX_STATE_SHELL="${CODEX_STATE_SHELL:-shell}"
-CODEX_STATE_ABSENT="${CODEX_STATE_ABSENT:-absent}"
 ACK_CHECK_MAX_JOBS="${ACK_CHECK_MAX_JOBS:-8}"
 ACK_CHECK_LOCK_STALE_SECONDS="${ACK_CHECK_LOCK_STALE_SECONDS:-120}"
 
@@ -165,310 +153,32 @@ assert_runtime_ready() {
     fi
 }
 
-parse_projects_from_config_yaml() {
-    local config_file="$1"
-    [ -f "$config_file" ] || return 1
-
-    awk '
-    function ltrim(s) { sub(/^[[:space:]]+/, "", s); return s }
-    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
-    function trim(s) { return rtrim(ltrim(s)) }
-    function strip_quotes(s) {
-        s = trim(s)
-        if (s ~ /^".*"$/) return substr(s, 2, length(s) - 2)
-        return s
-    }
-    function strip_inline_comment(s, out, i, ch, in_double) {
-        out = ""
-        in_double = 0
-        for (i = 1; i <= length(s); i++) {
-            ch = substr(s, i, 1)
-            if (ch == "\"") {
-                in_double = !in_double
-            } else if (ch == "#" && in_double == 0) {
-                break
-            }
-            out = out ch
-        }
-        return out
-    }
-    function reset_item() {
-        current_window = ""
-        current_dir = ""
-    }
-    function flush_item() {
-        if (current_window == "" && current_dir == "") return
-        if (current_window == "" || current_dir == "") {
-            parse_error = 1
-            reset_item()
-            return
-        }
-        print current_window ":" current_dir
-        parsed_count++
-        reset_item()
-    }
-    BEGIN {
-        in_projects = 0
-        projects_indent = -1
-        list_mode = 0
-        saw_projects = 0
-        parse_error = 0
-        parsed_count = 0
-        reset_item()
-    }
-    {
-        line = $0
-        sub(/\r$/, "", line)
-
-        if (in_projects == 0) {
-            if (line ~ /^[[:space:]]*projects:[[:space:]]*($|#)/) {
-                saw_projects = 1
-                in_projects = 1
-                match(line, /^[[:space:]]*/)
-                projects_indent = RLENGTH
-                list_mode = 0
-            }
-            next
-        }
-
-        if (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/) next
-
-        match(line, /^[[:space:]]*/)
-        indent = RLENGTH
-        if (indent <= projects_indent) {
-            flush_item()
-            in_projects = 0
-            next
-        }
-
-        content = substr(line, indent + 1)
-        content = trim(strip_inline_comment(content))
-        if (content == "") next
-
-        if (content ~ /^-[[:space:]]*/) {
-            flush_item()
-            list_mode = 1
-            content = trim(substr(content, 2))
-            if (content == "") next
-        }
-
-        split_pos = index(content, ":")
-        if (split_pos == 0) {
-            if (list_mode == 1) parse_error = 1
-            next
-        }
-
-        key = strip_quotes(trim(substr(content, 1, split_pos - 1)))
-        value = trim(strip_quotes(strip_inline_comment(substr(content, split_pos + 1))))
-
-        if (value == "") {
-            if (key == "window" || key == "name" || key == "dir" || key == "project_dir" || key == "path") {
-                parse_error = 1
-            }
-            next
-        }
-
-        if (key == "window" || key == "name") {
-            current_window = value
-            if (current_window != "" && current_dir != "") flush_item()
-            next
-        }
-
-        if (key == "dir" || key == "project_dir" || key == "path") {
-            current_dir = value
-            if (current_window != "" && current_dir != "") flush_item()
-            next
-        }
-
-        if (list_mode == 0) {
-            current_window = key
-            current_dir = value
-            flush_item()
-        }
-    }
-    END {
-        if (in_projects == 1) flush_item()
-        if (saw_projects == 0) exit 10
-        if (parse_error != 0 || parsed_count == 0) exit 11
-    }
-    ' "$config_file"
-}
-
-parse_project_dirs_from_config_yaml() {
-    local config_file="$1"
-    [ -f "$config_file" ] || return 1
-
-    awk '
-    function ltrim(s) { sub(/^[[:space:]]+/, "", s); return s }
-    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
-    function trim(s) { return rtrim(ltrim(s)) }
-    function strip_quotes(s) {
-        s = trim(s)
-        if (s ~ /^".*"$/) return substr(s, 2, length(s) - 2)
-        if (s ~ /^'\''.*'\''$/) return substr(s, 2, length(s) - 2)
-        return s
-    }
-    function strip_inline_comment(s, out, i, ch, in_double, in_single) {
-        out = ""
-        in_double = 0
-        in_single = 0
-        for (i = 1; i <= length(s); i++) {
-            ch = substr(s, i, 1)
-            if (ch == "\"" && in_single == 0) {
-                in_double = !in_double
-            } else if (ch == "'\''" && in_double == 0) {
-                in_single = !in_single
-            } else if (ch == "#" && in_double == 0 && in_single == 0) {
-                break
-            }
-            out = out ch
-        }
-        return out
-    }
-    BEGIN {
-        in_dirs = 0
-        dirs_indent = -1
-        parsed_count = 0
-    }
-    {
-        line = $0
-        sub(/\r$/, "", line)
-
-        if (in_dirs == 0) {
-            if (line ~ /^[[:space:]]*project_dirs:[[:space:]]*($|#)/) {
-                in_dirs = 1
-                match(line, /^[[:space:]]*/)
-                dirs_indent = RLENGTH
-            }
-            next
-        }
-
-        if (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/) next
-
-        match(line, /^[[:space:]]*/)
-        indent = RLENGTH
-        if (indent <= dirs_indent) {
-            in_dirs = 0
-            next
-        }
-
-        content = trim(strip_inline_comment(substr(line, indent + 1)))
-        if (content == "") next
-        if (content !~ /^-[[:space:]]*/) next
-
-        value = trim(substr(content, 2))
-        value = strip_quotes(strip_inline_comment(value))
-        if (value == "") next
-
-        print value
-        parsed_count++
-    }
-    END {
-        if (parsed_count == 0) exit 10
-    }
-    ' "$config_file"
-}
-
-derive_window_name_from_path() {
-    local dir="$1"
-    dir="${dir%/}"
-    local window
-    window=$(basename "$dir" 2>/dev/null || echo "")
-    [ -n "$window" ] || window="project"
-    window=$(printf '%s' "$window" | sed 's/[[:space:]]\+/-/g; s/:/-/g')
-    [ -n "$window" ] || window="project"
-    echo "$window"
-}
-
-project_window_exists() {
-    local needle="$1"
-    local entry
-    [[ ${#PROJECTS[@]:-0} -eq 0 ]] && return 1
-    for entry in "${PROJECTS[@]}"; do
-        if [ "${entry%%:*}" = "$needle" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-load_projects_from_config_yaml() {
-    local parsed_lines line window dir parse_mode
-    parse_mode="projects"
-    parsed_lines=$(parse_projects_from_config_yaml "$CONFIG_YAML_FILE" 2>/dev/null) || {
-        parse_mode="project_dirs"
-        parsed_lines=$(parse_project_dirs_from_config_yaml "$CONFIG_YAML_FILE" 2>/dev/null) || return 1
-    }
-    [ -n "$parsed_lines" ] || return 1
-
-    while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%$'\r'}"
-        [ -z "$line" ] && continue
-        if [ "$parse_mode" = "projects" ]; then
-            window="${line%%:*}"
-            dir="${line#*:}"
-            [ "$dir" = "$line" ] && continue
-        else
-            dir="$line"
-            window=$(derive_window_name_from_path "$dir")
-            if project_window_exists "$window"; then
-                local n=2
-                local base_window="$window"
-                while project_window_exists "${base_window}-${n}"; do
-                    n=$((n + 1))
-                done
-                window="${base_window}-${n}"
-            fi
-        fi
-        [ -z "$window" ] && continue
-        [ -z "$dir" ] && continue
-        PROJECTS+=("${window}:${dir}")
-    done <<< "$parsed_lines"
-
-    [ ${#PROJECTS[@]} -gt 0 ]
-}
-
-load_projects_from_fallback_conf() {
-    local line window rest dir
-    [ -f "$PROJECT_CONFIG_FILE" ] || return 1
-
-    while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%$'\r'}"
-        case "$line" in
-            ""|\#*)
-                continue
-                ;;
-        esac
-
-        window="${line%%:*}"
-        rest="${line#*:}"
-        [ "$rest" = "$line" ] && continue
-        dir="${rest%%:*}"
-
-        [ -z "$window" ] && continue
-        [ -z "$dir" ] && continue
-        PROJECTS+=("${window}:${dir}")
-    done < "$PROJECT_CONFIG_FILE"
-
-    [ ${#PROJECTS[@]} -gt 0 ]
-}
-
 load_projects() {
+    local loaded_projects="" entry
     PROJECTS=()
 
-    if load_projects_from_config_yaml; then
-        log "📁 loaded ${#PROJECTS[@]} projects from config.yaml"
-        return
+    loaded_projects=$(autopilot_load_projects_entries "$CONFIG_YAML_FILE" "$PROJECT_CONFIG_FILE" "${DEFAULT_PROJECTS[@]}" 2>/dev/null || true)
+    while IFS= read -r entry || [ -n "$entry" ]; do
+        [ -n "$entry" ] || continue
+        PROJECTS+=("$entry")
+    done <<< "$loaded_projects"
+
+    if [ "${#PROJECTS[@]}" -eq 0 ]; then
+        PROJECTS=("${DEFAULT_PROJECTS[@]}")
+        AUTOPILOT_PROJECT_SOURCE="defaults"
     fi
 
-    PROJECTS=()
-    if load_projects_from_fallback_conf; then
-        log "⚠️ config.yaml projects missing/invalid, fallback to watchdog-projects.conf (${#PROJECTS[@]} projects)"
-        return
-    fi
-
-    PROJECTS=("${DEFAULT_PROJECTS[@]}")
-    log "⚠️ project config missing/empty, fallback to defaults (${#PROJECTS[@]} projects)"
+    case "${AUTOPILOT_PROJECT_SOURCE:-defaults}" in
+        "config.yaml")
+            log "📁 loaded ${#PROJECTS[@]} projects from config.yaml"
+            ;;
+        "watchdog-projects.conf")
+            log "⚠️ config.yaml projects missing/invalid, fallback to watchdog-projects.conf (${#PROJECTS[@]} projects)"
+            ;;
+        *)
+            log "⚠️ project config missing/empty, fallback to defaults (${#PROJECTS[@]} projects)"
+            ;;
+    esac
 }
 
 send_tmux_message() {
@@ -831,6 +541,8 @@ handle_permission() {
 
 handle_idle() {
     local window="$1" safe="$2" project_dir="$3"
+    local prd_done_logged_file="${STATE_DIR}/prd-done-logged-${safe}"
+    local prd_skip_nudge=false
 
     # PRD 完成不代表没事做 — 还有 review fixes、autocheck issues、manual tasks
     # 只有当 PRD 完成 + 无 pending issues + 无 review issues 时才降低 nudge 频率
@@ -858,11 +570,19 @@ handle_idle() {
             else
                 # 真的没事做了 → 完全停止 nudge，不要干扰
                 # 手动消息和队列任务会正常处理（由优先级 1/2 分支负责）
-                log "ℹ️ ${window}: PRD complete + review clean + no queue, skip nudge entirely"
-                return
+                prd_skip_nudge=true
             fi
         fi
     fi
+
+    if [ "$prd_skip_nudge" = "true" ]; then
+        if [ ! -f "$prd_done_logged_file" ]; then
+            log "ℹ️ ${window}: PRD complete + review clean + no queue, skip nudge entirely"
+            touch "$prd_done_logged_file"
+        fi
+        return
+    fi
+    rm -f "$prd_done_logged_file" 2>/dev/null || true
 
     # 检查是否有手动任务在 pending（手动消息 → 暂停 nudge 直到 Codex 开始工作）
     # 保护时间 300s (5分钟)：复杂任务 Codex 可能需要几分钟才开始 working
@@ -885,6 +605,7 @@ handle_idle() {
 
     # 指数退避: nudge 次数越多，冷却越长 (300, 600, 1200, 2400, 4800, 9600)
     # 但队列任务绕过退避（用户主动提交 = 最高优先级）
+    local key="nudge-${safe}"
     local nudge_count_file="${COOLDOWN_DIR}/nudge-count-${safe}"
     local nudge_count
     nudge_count=$(cat "$nudge_count_file" 2>/dev/null || echo 0)
@@ -905,7 +626,6 @@ handle_idle() {
         fi
 
         local effective_cooldown=$((NUDGE_COOLDOWN * (1 << (nudge_count > 5 ? 5 : nudge_count))))
-        local key="nudge-${safe}"
         in_cooldown "$key" "$effective_cooldown" && return
     else
         log "📋 ${window}: queue task pending, bypassing backoff (nudge_count=${nudge_count})"
@@ -1107,6 +827,17 @@ handle_idle() {
             log "📤 ${window}: auto-nudged #$((nudge_count+1)) (idle ${idle_secs}s) — ${nudge_msg:0:80}"
             start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "idle nudge"
             sync_project_status "$project_dir" "nudge_sent" "window=${window}" "reason=${nudge_reason}" "state=idle"
+        else
+            local failed_count=$((nudge_count + 1))
+            echo "$failed_count" > "$nudge_count_file"
+            set_cooldown "$key"
+            log "❌ ${window}: idle nudge send failed (#${failed_count})"
+            sync_project_status "$project_dir" "nudge_send_failed" "window=${window}" "reason=${nudge_reason}" "state=idle" "retry=${failed_count}"
+            if [ "$failed_count" -ge "$NUDGE_MAX_RETRY" ]; then
+                pause_auto_nudge "$window" "$safe" "idle nudge 连续发送失败 ${failed_count} 次"
+                echo 0 > "$nudge_count_file"
+                sync_project_status "$project_dir" "nudge_paused" "window=${window}" "state=idle" "reason=send_failed" "retry=${failed_count}"
+            fi
         fi
     fi
     release_lock "$safe"
@@ -1251,7 +982,7 @@ check_new_commits() {
     fi
 
     # Layer 1 自动检查
-    run_auto_checks "$window" "$safe" "$project_dir" "$msg"
+    run_auto_checks "$window" "$safe" "$project_dir"
     # PRD 引擎：按本次 commit 变更文件自动匹配并执行 checker
     run_prd_checks_for_commit "$window" "$safe" "$project_dir" "$last_head" "$current_head"
 
@@ -1260,7 +991,7 @@ check_new_commits() {
 }
 
 run_auto_checks() {
-    local window="$1" safe="$2" project_dir="$3" commit_msg="$4"
+    local window="$1" safe="$2" project_dir="$3"
     local key="autocheck-${safe}"
     in_cooldown "$key" 120 && return  # 2 分钟内不重复跑
     set_cooldown "$key"
@@ -1274,60 +1005,29 @@ run_auto_checks() {
     fi
     (
         trap 'rm -rf "'"$check_lock"'"' EXIT
-        local issues=""
+        local check_output rc issues
+        check_output=$("${SCRIPT_DIR}/auto-check.sh" "$project_dir" --issues-only 2>&1)
+        rc=$?
 
-        # 危险模式扫描（仅扫描 git 跟踪文件，避免 node_modules 误报）
-        local danger
-        danger=$(cd "$project_dir" && git grep -nI -E '\beval\s*\(' -- '*.ts' '*.tsx' 2>/dev/null | grep -vc "test\|spec\|mock" 2>/dev/null || true)
-        danger=$(normalize_int "$danger")
-        if [ "$danger" -gt 0 ]; then
-            issues="${issues}发现 eval() 调用 (${danger} 处). "
+        if [ "$rc" -eq 0 ]; then
+            rm -f "${STATE_DIR}/autocheck-issues-${safe}" "${STATE_DIR}/autocheck-hash-${safe}" 2>/dev/null || true
+            return 0
         fi
 
-        # 硬编码密钥扫描（仅扫描 git 跟踪文件，避免依赖目录噪音）
-        local secrets
-        secrets=$(cd "$project_dir" && git grep -nI -E '(api_key|apiKey|secret|password)\s*[:=]\s*["'"'"'][^"'"'"']{8,}' -- '*.ts' '*.tsx' 2>/dev/null | grep -vc "test\|mock\|spec\|example\|type\|interface\|\.d\.ts" 2>/dev/null || true)
-        secrets=$(normalize_int "$secrets")
-        if [ "$secrets" -gt 0 ]; then
-            issues="${issues}疑似硬编码密钥 (${secrets} 处). "
-        fi
+        issues=$(printf '%s\n' "$check_output" | sed '/^[[:space:]]*$/d')
+        [ -n "$issues" ] || issues="auto-check failed (rc=${rc})"
 
-        # TypeScript 类型检查（可能慢，但在后台不阻塞）
-        if [ -f "${project_dir}/tsconfig.json" ]; then
-            local tsc_out
-            tsc_out=$(cd "$project_dir" && run_with_timeout 30 npx tsc --noEmit 2>&1 | grep -c "error TS" 2>/dev/null || true)
-            tsc_out=$(normalize_int "$tsc_out")
-            if [ "$tsc_out" -gt 0 ]; then
-                issues="${issues}TypeScript 类型错误 (${tsc_out} errors). "
-            fi
-        fi
-
-        # 如果 fix: commit，自动跑测试（后台，有 timeout）
-        if echo "$commit_msg" | grep -qE '^fix'; then
-            if [ -f "${project_dir}/package.json" ]; then
-                local test_result
-                test_result=$(cd "$project_dir" && run_with_timeout 60 npx jest --passWithNoTests --silent 2>&1 | tail -3)
-                if echo "$test_result" | grep -qiE 'fail|error'; then
-                    issues="${issues}fix commit 后测试失败! "
-                    # 写标记文件供 get_smart_nudge 使用
-                    echo "1" > "${COMMIT_COUNT_DIR}/${safe}-test-fail"
-                fi
-            fi
-        fi
-
-        if [ -n "$issues" ]; then
-            # P1-4: issue hash 去重，相同问题不重复 nudge
-            local issues_hash
-            issues_hash=$(hash_text "$issues")
-            local prev_hash
-            prev_hash=$(cat "${STATE_DIR}/autocheck-hash-${safe}" 2>/dev/null || echo "")
-            if [ "$issues_hash" = "$prev_hash" ]; then
-                log "⏭ ${window}: Layer 1 issues unchanged, skip re-nudge"
-            else
-                echo "$issues_hash" > "${STATE_DIR}/autocheck-hash-${safe}"
-                log "⚠️ ${window}: Layer 1 issues — ${issues}"
-                echo "$issues" > "${STATE_DIR}/autocheck-issues-${safe}.tmp" && mv -f "${STATE_DIR}/autocheck-issues-${safe}.tmp" "${STATE_DIR}/autocheck-issues-${safe}"
-            fi
+        # P1-4: issue hash 去重，相同问题不重复 nudge
+        local issues_hash
+        issues_hash=$(hash_text "$issues")
+        local prev_hash
+        prev_hash=$(cat "${STATE_DIR}/autocheck-hash-${safe}" 2>/dev/null || echo "")
+        if [ "$issues_hash" = "$prev_hash" ]; then
+            log "⏭ ${window}: Layer 1 issues unchanged, skip re-nudge"
+        else
+            echo "$issues_hash" > "${STATE_DIR}/autocheck-hash-${safe}"
+            log "⚠️ ${window}: Layer 1 issues — ${issues:0:200}"
+            echo "$issues" > "${STATE_DIR}/autocheck-issues-${safe}.tmp" && mv -f "${STATE_DIR}/autocheck-issues-${safe}.tmp" "${STATE_DIR}/autocheck-issues-${safe}"
         fi
     ) &
 }
@@ -1627,6 +1327,7 @@ while true; do
             if [ "$new_remaining" -gt 0 ]; then
                 log "📋 ${window}: prd-todo.md updated, ${new_remaining} items remaining — resetting nudge"
                 echo 0 > "${COOLDOWN_DIR}/nudge-count-${safe}"
+                rm -f "${STATE_DIR}/prd-done-logged-${safe}" 2>/dev/null || true
                 rm -f "$(nudge_pause_file "$safe")" "${STATE_DIR}/alert-stalled-${safe}"
                 send_telegram_alert "$window" "prd-todo.md 有新需求 (${new_remaining} 项待完成)，已重新激活 nudge"
             fi
