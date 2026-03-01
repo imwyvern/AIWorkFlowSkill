@@ -1335,7 +1335,7 @@ while true; do
 
         # Fix 6: 非 working 状态清除僵死追踪
         if [ "$state" != "$CODEX_STATE_WORKING" ]; then
-            rm -f "${STATE_DIR}/working-since-${safe}" "${STATE_DIR}/working-head-${safe}" "${STATE_DIR}/working-ctx-${safe}" "${STATE_DIR}/stall-alerted-${safe}" 2>/dev/null || true
+            rm -f "${STATE_DIR}/working-since-${safe}" "${STATE_DIR}/working-head-${safe}" "${STATE_DIR}/working-ctx-${safe}" "${STATE_DIR}/working-pane-${safe}" "${STATE_DIR}/stall-alerted-${safe}" 2>/dev/null || true
         fi
 
         case "$state" in
@@ -1351,27 +1351,41 @@ while true; do
                 working_ctx_f="${STATE_DIR}/working-ctx-${safe}"
                 prev_stall_head=$(cat "$working_head_f" 2>/dev/null || echo "")
                 prev_stall_ctx=$(cat "$working_ctx_f" 2>/dev/null || echo "")
+                # Fix 6.1: 增加 pane 内容 hash 检测 — TUI 输出变化说明确实在工作
+                working_pane_f="${STATE_DIR}/working-pane-${safe}"
+                pane_content=$($TMUX capture-pane -t "${SESSION}:${window}" -p 2>/dev/null | tail -30)
+                pane_hash=$(hash_text "$pane_content")
+                prev_pane_hash=$(cat "$working_pane_f" 2>/dev/null || echo "")
+                pane_changed=false
+                if [ "$pane_hash" != "$prev_pane_hash" ]; then
+                    pane_changed=true
+                    echo "$pane_hash" > "$working_pane_f"
+                fi
                 if [ "$stall_head" != "$prev_stall_head" ] || [ "$stall_ctx" != "$prev_stall_ctx" ]; then
                     # HEAD 或 context 变化 → 重置追踪
                     now_ts > "$working_since_f"
                     echo "$stall_head" > "$working_head_f"
                     echo "$stall_ctx" > "$working_ctx_f"
                     rm -f "${STATE_DIR}/stall-alerted-${safe}"
+                elif [ "$pane_changed" = true ]; then
+                    # HEAD/context 没变，但 pane 内容有变化 → TUI 活着，重置计时
+                    now_ts > "$working_since_f"
+                    rm -f "${STATE_DIR}/stall-alerted-${safe}"
                 else
-                    # 没变化 → 检查持续时间
+                    # HEAD/context/pane 全都没变 → 可能真的僵死
                     working_since_val=$(cat "$working_since_f" 2>/dev/null || echo 0)
                     working_since_val=$(normalize_int "$working_since_val")
                     stall_dur=$(( $(now_ts) - working_since_val ))
                     if [ "$stall_dur" -ge 1800 ]; then
                         # 30 分钟 → Telegram 告警
                         if [ ! -f "${STATE_DIR}/stall-alerted-${safe}" ]; then
-                            send_telegram_alert "$window" "TUI 可能僵死（working ${stall_dur}s 但 HEAD 和 context 无变化）"
+                            send_telegram_alert "$window" "TUI 可能僵死（working ${stall_dur}s 但 HEAD/context/pane输出 均无变化）"
                             touch "${STATE_DIR}/stall-alerted-${safe}"
-                            log "🚨 ${window}: possible TUI stall (${stall_dur}s, HEAD=${stall_head:0:7}, ctx=${stall_ctx}%)"
+                            log "🚨 ${window}: possible TUI stall (${stall_dur}s, HEAD=${stall_head:0:7}, ctx=${stall_ctx}%, pane unchanged)"
                         fi
                     elif [ "$stall_dur" -ge 900 ]; then
                         # 15 分钟 → 日志 warn
-                        log "⚠️ ${window}: working ${stall_dur}s with no HEAD/context change (HEAD=${stall_head:0:7}, ctx=${stall_ctx}%)"
+                        log "⚠️ ${window}: working ${stall_dur}s with no HEAD/context/pane change (HEAD=${stall_head:0:7}, ctx=${stall_ctx}%)"
                     fi
                 fi
                 ;;
