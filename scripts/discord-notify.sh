@@ -28,6 +28,7 @@ fallback_channel_id() {
     replyher)         echo "1473294176128077888" ;;
     simcity)          echo "1473294182905938013" ;;
     autopilot)        echo "1473294190094848133" ;;
+    wpk)              echo "1477291487170400429" ;;
     conduit)          echo "1473294196717912310" ;;
     research)         echo "1473294203596443690" ;;
     incidents)        echo "1473294209682378815" ;;
@@ -123,6 +124,8 @@ fi
 MSG_TRUNCATED="${MSG:0:1990}"
 
 curl -s -X POST \
+  --connect-timeout 5 \
+  --max-time 15 \
   -H "Authorization: Bot $BOT_TOKEN" \
   -H "Content-Type: application/json" \
   "https://discord.com/api/v10/channels/$CHANNEL_ID/messages" \

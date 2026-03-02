@@ -163,15 +163,21 @@ cmd_start() {
     local new_line
     new_line=$(echo "$task_line" | sed "s/^\- \[ \]/- [→]/" | sed "s/$/ | started: $(now_iso)/")
 
-    # 用 python 做精确的第一行替换（避免 sed 对特殊字符的问题）
-    python3 -c "
+    # 用 python 做精确的第一行替换（避免 shell 插值导致注入）
+    python3 - "$file" "$task_line" "$new_line" <<'PYEOF' 2>/dev/null || {
+import pathlib
 import sys
-content = open('$file', 'r').read()
-old = '''$task_line'''
-new = '''$new_line'''
-content = content.replace(old, new, 1)
-open('$file', 'w').write(content)
-" 2>/dev/null || {
+
+queue_file = pathlib.Path(sys.argv[1])
+old_line = sys.argv[2]
+new_line = sys.argv[3]
+
+content = queue_file.read_text(encoding="utf-8")
+if old_line not in content:
+    raise SystemExit(1)
+content = content.replace(old_line, new_line, 1)
+queue_file.write_text(content, encoding="utf-8")
+PYEOF
         # fallback: sed
         sed -i '' "0,/^\- \[ \]/s/^\- \[ \]/- [→]/" "$file"
     }
@@ -196,18 +202,23 @@ cmd_done() {
 
         local done_time
         done_time=$(now_iso)
-        python3 << PYEOF
+        python3 - "$file" "$done_time" "$commit_info" <<'PYEOF'
+import pathlib
 import sys
-f = "$file"
-done_info = " | done: ${done_time}${commit_info}"
-content = open(f).read()
+
+queue_file = pathlib.Path(sys.argv[1])
+done_time = sys.argv[2]
+commit_info = sys.argv[3]
+done_info = f" | done: {done_time}{commit_info}"
+
+content = queue_file.read_text(encoding="utf-8")
 content = content.replace("- [→]", "- [x]", 1)
 lines = content.split("\n")
 for i, line in enumerate(lines):
     if "- [x]" in line and "done:" not in line and "started:" in line:
         lines[i] = line + done_info
         break
-open(f, "w").write("\n".join(lines))
+queue_file.write_text("\n".join(lines), encoding="utf-8")
 PYEOF
         # 自动同步 prd-todo: 如果队列任务关键词匹配 prd-todo 中的未完成项，标记为 ✅
         sync_prd_todo "$project" "$file"
@@ -285,12 +296,15 @@ cmd_fail() {
         in_progress_line=$(grep -m1 '^\- \[→\]' "$file" || true)
         task_desc=$(printf '%s\n' "$in_progress_line" | sed 's/^- \[→\] //; s/ | added:.*$//')
         source_info=$(extract_source_from_line "$in_progress_line")
-        # 改为 [!] 标记失败（python 处理 UTF-8）
-        python3 << PYEOF
-f = "$file"
-content = open(f).read()
+        # 改为 [!] 标记失败（python 处理 UTF-8，避免 shell 插值注入）
+        python3 - "$file" <<'PYEOF'
+import pathlib
+import sys
+
+queue_file = pathlib.Path(sys.argv[1])
+content = queue_file.read_text(encoding="utf-8")
 content = content.replace("- [→]", "- [!]", 1)
-open(f, "w").write(content)
+queue_file.write_text(content, encoding="utf-8")
 PYEOF
         retry_entry="- [ ] ${task_desc} (retry) | added: $(now_iso)"
         [ -n "$source_info" ] && retry_entry="${retry_entry} | source: ${source_info}"
