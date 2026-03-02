@@ -6,9 +6,13 @@
 #   normalize_int()        — sanitize to integer
 #   sanitize()             — safe filename from window name
 #   now_ts()               — current unix timestamp
+#   file_mtime()           — 跨平台文件修改时间
 #   run_with_timeout()     — macOS-compatible timeout wrapper
 #   load_telegram_config() — sets LIB_TG_TOKEN and LIB_TG_CHAT
 #   send_telegram()        — send Telegram message (background)
+#   get_discord_channel_for_window()  — 按窗口名查 Discord 频道名
+#   get_tmux_window_for_channel()     — 按 Discord 频道名查窗口名
+#   get_discord_channel_id_for_channel() — 按频道名查 Discord channel_id
 #   acquire_lock()         — mkdir-based lock with stale timeout
 #   release_lock()         — release mkdir lock
 #
@@ -252,6 +256,205 @@ autopilot_parse_project_dirs_from_config_yaml() {
         if (parsed_count == 0) exit 10
     }
     ' "$config_file"
+}
+
+autopilot_default_config_yaml() {
+    echo "${AUTOPILOT_CONFIG_FILE:-$HOME/.autopilot/config.yaml}"
+}
+
+autopilot_parse_discord_channels_from_config_yaml() {
+    local config_file="$1"
+    [ -f "$config_file" ] || return 1
+
+    awk '
+    function ltrim(s) { sub(/^[[:space:]]+/, "", s); return s }
+    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
+    function trim(s) { return rtrim(ltrim(s)) }
+    function strip_quotes(s) {
+        s = trim(s)
+        if (s ~ /^".*"$/) return substr(s, 2, length(s) - 2)
+        if (s ~ /^'\''.*'\''$/) return substr(s, 2, length(s) - 2)
+        return s
+    }
+    function strip_inline_comment(s, out, i, ch, in_double, in_single) {
+        out = ""
+        in_double = 0
+        in_single = 0
+        for (i = 1; i <= length(s); i++) {
+            ch = substr(s, i, 1)
+            if (ch == "\"" && in_single == 0) {
+                in_double = !in_double
+            } else if (ch == "'\''" && in_double == 0) {
+                in_single = !in_single
+            } else if (ch == "#" && in_double == 0 && in_single == 0) {
+                break
+            }
+            out = out ch
+        }
+        return out
+    }
+    function reset_item() {
+        current_name = ""
+        current_channel_id = ""
+        current_tmux_window = ""
+        current_project_dir = ""
+        current_indent = -1
+    }
+    function flush_item() {
+        if (current_name == "") return
+        print current_name "\t" current_channel_id "\t" current_tmux_window "\t" current_project_dir
+        parsed_count++
+        reset_item()
+    }
+    BEGIN {
+        in_discord = 0
+        discord_indent = -1
+        saw_discord = 0
+        parsed_count = 0
+        reset_item()
+    }
+    {
+        line = $0
+        sub(/\r$/, "", line)
+
+        if (in_discord == 0) {
+            if (line ~ /^[[:space:]]*discord_channels:[[:space:]]*($|#)/) {
+                saw_discord = 1
+                in_discord = 1
+                match(line, /^[[:space:]]*/)
+                discord_indent = RLENGTH
+            }
+            next
+        }
+
+        if (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/) next
+
+        match(line, /^[[:space:]]*/)
+        indent = RLENGTH
+        if (indent <= discord_indent) {
+            flush_item()
+            in_discord = 0
+            next
+        }
+
+        content = trim(strip_inline_comment(substr(line, indent + 1)))
+        if (content == "") next
+
+        split_pos = index(content, ":")
+        if (split_pos == 0) next
+
+        key = strip_quotes(trim(substr(content, 1, split_pos - 1)))
+        raw_value = trim(substr(content, split_pos + 1))
+        value = strip_quotes(trim(strip_inline_comment(raw_value)))
+
+        if (raw_value == "" || value == "") {
+            if (current_name != "" && indent <= current_indent) flush_item()
+            current_name = key
+            current_channel_id = ""
+            current_tmux_window = ""
+            current_project_dir = ""
+            current_indent = indent
+            next
+        }
+
+        if (current_name == "" || indent <= current_indent) next
+
+        if (key == "channel_id") {
+            current_channel_id = value
+            next
+        }
+        if (key == "tmux_window") {
+            current_tmux_window = value
+            next
+        }
+        if (key == "project_dir" || key == "dir" || key == "path") {
+            current_project_dir = value
+            next
+        }
+    }
+    END {
+        if (in_discord == 1) flush_item()
+        if (saw_discord == 0) exit 10
+        if (parsed_count == 0) exit 11
+    }
+    ' "$config_file"
+}
+
+get_discord_channel_for_window() {
+    local window="${1:-}"
+    local config_file="${2:-$(autopilot_default_config_yaml)}"
+    [ -n "$window" ] || return 1
+
+    local safe_window
+    safe_window=$(sanitize "$window")
+
+    local channel_name channel_id tmux_window project_dir safe_tmux_window
+    while IFS=$'\t' read -r channel_name channel_id tmux_window project_dir || [ -n "$channel_name" ]; do
+        [ -n "$channel_name" ] || continue
+        if [ "$tmux_window" = "$window" ]; then
+            echo "$channel_name"
+            return 0
+        fi
+        safe_tmux_window=$(sanitize "$tmux_window")
+        if [ -n "$safe_tmux_window" ] && [ "$safe_tmux_window" = "$safe_window" ]; then
+            echo "$channel_name"
+            return 0
+        fi
+    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+
+    return 1
+}
+
+get_tmux_window_for_channel() {
+    local channel_name="${1:-}"
+    local config_file="${2:-$(autopilot_default_config_yaml)}"
+    [ -n "$channel_name" ] || return 1
+
+    local target_channel_lower
+    target_channel_lower=$(printf '%s' "$channel_name" | tr '[:upper:]' '[:lower:]')
+
+    local cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir cfg_channel_lower
+    while IFS=$'\t' read -r cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir || [ -n "$cfg_channel" ]; do
+        [ -n "$cfg_channel" ] || continue
+        if [ "$cfg_channel" = "$channel_name" ]; then
+            echo "$cfg_tmux_window"
+            return 0
+        fi
+        cfg_channel_lower=$(printf '%s' "$cfg_channel" | tr '[:upper:]' '[:lower:]')
+        if [ "$cfg_channel_lower" = "$target_channel_lower" ]; then
+            echo "$cfg_tmux_window"
+            return 0
+        fi
+    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+
+    return 1
+}
+
+get_discord_channel_id_for_channel() {
+    local channel_name="${1:-}"
+    local config_file="${2:-$(autopilot_default_config_yaml)}"
+    [ -n "$channel_name" ] || return 1
+
+    local target_channel_lower
+    target_channel_lower=$(printf '%s' "$channel_name" | tr '[:upper:]' '[:lower:]')
+
+    local cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir cfg_channel_lower
+    while IFS=$'\t' read -r cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir || [ -n "$cfg_channel" ]; do
+        [ -n "$cfg_channel" ] || continue
+        if [ "$cfg_channel" = "$channel_name" ]; then
+            [ -n "$cfg_channel_id" ] || return 1
+            echo "$cfg_channel_id"
+            return 0
+        fi
+        cfg_channel_lower=$(printf '%s' "$cfg_channel" | tr '[:upper:]' '[:lower:]')
+        if [ "$cfg_channel_lower" = "$target_channel_lower" ]; then
+            [ -n "$cfg_channel_id" ] || return 1
+            echo "$cfg_channel_id"
+            return 0
+        fi
+    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+
+    return 1
 }
 
 autopilot_derive_window_name_from_path() {

@@ -6,7 +6,7 @@
 #       queue 优先级高于 prd-todo（watchdog handle_idle 优先级 2 vs 4）
 #
 # 用法:
-#   task-queue.sh add <project> <task> [priority]   # 添加任务 (priority: high/normal)
+#   task-queue.sh add <project> <task> [priority] [--source discord:<channel_id>:<message_id>]
 #   task-queue.sh list <project>                     # 列出队列
 #   task-queue.sh next <project>                     # 获取下一个待办任务
 #   task-queue.sh start <project>                    # 标记第一个待办为进行中
@@ -35,6 +35,14 @@ queue_file() {
     echo "${QUEUE_DIR}/${safe}.md"
 }
 
+extract_source_from_line() {
+    local line="${1:-}"
+    local source_part
+    source_part=$(printf '%s\n' "$line" | sed -n 's/^.* | source: //p' | head -n1)
+    source_part="${source_part%% | *}"
+    printf '%s\n' "$source_part" | sed 's/[[:space:]]*$//'
+}
+
 # 确保队列文件存在且有 header
 ensure_queue() {
     local file="$1"
@@ -49,12 +57,42 @@ HEADER
 cmd_add() {
     local project="${1:?用法: task-queue.sh add <project> <task>}"
     local task="${2:?缺少任务描述}"
-    local priority="${3:-normal}"
+    shift 2 || true
+
+    local priority="normal"
+    local source=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            high|normal)
+                priority="$1"
+                ;;
+            --source)
+                shift || true
+                source="${1:-}"
+                if [ -z "$source" ]; then
+                    echo "ERROR: --source 缺少参数" >&2
+                    return 1
+                fi
+                ;;
+            *)
+                echo "ERROR: 未知参数: $1" >&2
+                return 1
+                ;;
+        esac
+        shift || true
+    done
+
+    if [ -n "$source" ] && [[ ! "$source" =~ ^discord:[0-9]+:[0-9]+$ ]]; then
+        echo "ERROR: --source 格式必须是 discord:<channel_id>:<message_id>" >&2
+        return 1
+    fi
+
     local file
     file=$(queue_file "$project")
     ensure_queue "$file"
 
     local entry="- [ ] ${task} | added: $(now_iso)"
+    [ -n "$source" ] && entry="${entry} | source: ${source}"
 
     if [ "$priority" = "high" ]; then
         # 高优先级: 插入到第一个 [ ] 之前（python 处理，避免 sed UTF-8 问题）
@@ -152,6 +190,10 @@ cmd_done() {
 
     # 把第一个 [→] 改为 [x]（用 python 处理 UTF-8 安全）
     if grep -q '^\- \[→\]' "$file"; then
+        local in_progress_line source_info
+        in_progress_line=$(grep -m1 '^\- \[→\]' "$file" || true)
+        source_info=$(extract_source_from_line "$in_progress_line")
+
         local done_time
         done_time=$(now_iso)
         python3 << PYEOF
@@ -169,8 +211,13 @@ open(f, "w").write("\n".join(lines))
 PYEOF
         # 自动同步 prd-todo: 如果队列任务关键词匹配 prd-todo 中的未完成项，标记为 ✅
         sync_prd_todo "$project" "$file"
-        
-        echo "OK: 任务已完成"
+
+        if [ -n "$source_info" ]; then
+            echo "OK: 任务已完成 | source: ${source_info}"
+            echo "SOURCE: ${source_info}"
+        else
+            echo "OK: 任务已完成"
+        fi
     else
         return 1
     fi
@@ -234,7 +281,10 @@ cmd_fail() {
     if grep -q '^\- \[→\]' "$file"; then
         # 提取任务描述（在改标记之前）
         local task_desc
-        task_desc=$(grep -m1 '^\- \[→\]' "$file" | sed 's/^- \[→\] //; s/ | added:.*$//')
+        local in_progress_line source_info retry_entry
+        in_progress_line=$(grep -m1 '^\- \[→\]' "$file" || true)
+        task_desc=$(printf '%s\n' "$in_progress_line" | sed 's/^- \[→\] //; s/ | added:.*$//')
+        source_info=$(extract_source_from_line "$in_progress_line")
         # 改为 [!] 标记失败（python 处理 UTF-8）
         python3 << PYEOF
 f = "$file"
@@ -242,7 +292,9 @@ content = open(f).read()
 content = content.replace("- [→]", "- [!]", 1)
 open(f, "w").write(content)
 PYEOF
-        echo "- [ ] ${task_desc} (retry) | added: $(now_iso)" >> "$file"
+        retry_entry="- [ ] ${task_desc} (retry) | added: $(now_iso)"
+        [ -n "$source_info" ] && retry_entry="${retry_entry} | source: ${source_info}"
+        echo "$retry_entry" >> "$file"
         echo "OK: 任务已标记失败并重新入队"
     else
         return 1

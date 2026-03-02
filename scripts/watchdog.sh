@@ -245,6 +245,19 @@ send_telegram_alert() {
     send_telegram "🚨 ${window}: ${text}"
 }
 
+send_discord_by_window() {
+    local window="$1" text="$2"
+    [ -n "$text" ] || return 0
+    [ -x "${SCRIPT_DIR}/discord-notify.sh" ] || return 0
+
+    local discord_channel
+    discord_channel=$(get_discord_channel_for_window "$window" 2>/dev/null || true)
+    [ -n "$discord_channel" ] || return 0
+
+    "${SCRIPT_DIR}/discord-notify.sh" "$discord_channel" "$text" >/dev/null 2>&1 \
+        || log "⚠️ ${window}: discord notify failed"
+}
+
 start_nudge_ack_check() {
     local window="$1" safe="$2" project_dir="$3" before_head="$4" before_ctx="$5" reason="$6"
     local ack_lock="${LOCK_DIR}/ack-${safe}.lock.d"
@@ -966,7 +979,9 @@ check_new_commits() {
     queue_in_progress=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${safe}.md" 2>/dev/null || true)
     queue_in_progress=$(normalize_int "$queue_in_progress")
     if [ "$queue_in_progress" -gt 0 ]; then
-        "${SCRIPT_DIR}/task-queue.sh" done "$safe" "${current_head:0:7}" 2>/dev/null || true
+        local queue_done_output queue_source
+        queue_done_output=$("${SCRIPT_DIR}/task-queue.sh" done "$safe" "${current_head:0:7}" 2>/dev/null || true)
+        queue_source=$(printf '%s\n' "$queue_done_output" | sed -n 's/^SOURCE: //p' | head -n1 | tr -d '\r')
         log "📋✅ ${window}: queue task completed (commit ${current_head:0:7})"
         # 检查是否还有更多队列任务
         local remaining
@@ -979,6 +994,12 @@ check_new_commits() {
         local done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
         [ "$remaining" -gt 0 ] && done_msg="${done_msg}\n📋 还剩 ${remaining} 个任务待处理"
         send_telegram "$done_msg"
+
+        # Discord 通知完成
+        local discord_done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
+        [ "$remaining" -gt 0 ] && discord_done_msg="${discord_done_msg} | 还剩 ${remaining} 个任务"
+        [ -n "$queue_source" ] && discord_done_msg="${discord_done_msg} | source: ${queue_source}"
+        send_discord_by_window "$window" "$discord_done_msg"
     fi
 
     # Layer 1 自动检查

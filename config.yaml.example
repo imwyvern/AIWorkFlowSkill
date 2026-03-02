@@ -49,6 +49,29 @@ project_dirs:
   # - "~/SoulKeyboard-Wechat"
   # - "~/quant-develop"
 
+# Discord 频道与项目路由映射
+discord_channels:
+  shike:
+    channel_id: "1473294169203150941"
+    tmux_window: "Shike"
+    project_dir: "/Users/wes/Shike"
+  replyher:
+    channel_id: "1473294176128077888"
+    tmux_window: "replyher_android-2"
+    project_dir: "/Users/wes/replyher_android-2"
+  simcity:
+    channel_id: "1473294182905938013"
+    tmux_window: "agent-simcity"
+    project_dir: "/Users/wes/projects/agent-simcity"
+  autopilot:
+    channel_id: "1473294190094848133"
+    tmux_window: "autopilot-dev"
+    project_dir: "/Users/wes/.autopilot"
+  wpk:
+    channel_id: "1477291487170400429"
+    tmux_window: "kpw-bot-js"
+    project_dir: "/Users/wes/clawd/kpw-bot-js"
+
 # 高级模式: 使用 ~/.autopilot/projects/ 目录
 # 每个项目一个子目录，包含 tasks.yaml
 #
