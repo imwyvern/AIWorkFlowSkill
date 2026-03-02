@@ -254,8 +254,10 @@ send_discord_by_window() {
     discord_channel=$(get_discord_channel_for_window "$window" 2>/dev/null || true)
     [ -n "$discord_channel" ] || return 0
 
-    "${SCRIPT_DIR}/discord-notify.sh" "$discord_channel" "$text" >/dev/null 2>&1 \
-        || log "⚠️ ${window}: discord notify failed"
+    (
+        "${SCRIPT_DIR}/discord-notify.sh" "$discord_channel" "$text" >/dev/null 2>&1 \
+            || log "⚠️ ${window}: discord notify failed"
+    ) &
 }
 
 start_nudge_ack_check() {

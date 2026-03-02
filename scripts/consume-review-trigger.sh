@@ -65,8 +65,10 @@ notify_review_result() {
         local discord_channel
         discord_channel=$(get_discord_channel_for_window "$window" 2>/dev/null || true)
         if [ -n "$discord_channel" ]; then
-            "${SCRIPT_DIR}/discord-notify.sh" "$discord_channel" "$message" >/dev/null 2>&1 \
-                || log "⚠️ ${window}: discord review notify failed"
+            (
+                "${SCRIPT_DIR}/discord-notify.sh" "$discord_channel" "$message" >/dev/null 2>&1 \
+                    || log "⚠️ ${window}: discord review notify failed"
+            ) &
         fi
     fi
 }
