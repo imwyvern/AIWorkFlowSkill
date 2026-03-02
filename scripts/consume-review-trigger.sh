@@ -55,7 +55,20 @@ log() {
 }
 
 notify_review_result() {
-    send_telegram "$1"
+    local window="${1:-}"
+    local message="${2:-}"
+    [ -n "$message" ] || return 0
+
+    send_telegram "$message"
+
+    if [ -x "${SCRIPT_DIR}/discord-notify.sh" ]; then
+        local discord_channel
+        discord_channel=$(get_discord_channel_for_window "$window" 2>/dev/null || true)
+        if [ -n "$discord_channel" ]; then
+            "${SCRIPT_DIR}/discord-notify.sh" "$discord_channel" "$message" >/dev/null 2>&1 \
+                || log "⚠️ ${window}: discord review notify failed"
+        fi
+    fi
 }
 
 is_codex_idle() {
@@ -354,7 +367,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         sync_project_status "$project_dir" "review_issues" "window=${window}" "issues=${combined_issues}" "state=idle"
         # Telegram 通知 review 结果
         issue_preview="${combined_issues:0:200}"
-        notify_review_result "🔍 ${window} Review 发现问题，已触发修复循环：${issue_preview}"
+        notify_review_result "$window" "🔍 ${window} Review 发现问题，已触发修复循环：${issue_preview}"
     else
         log "✅ ${safe}: review clean"
         # review CLEAN = 本轮迭代完成
@@ -368,7 +381,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         rm -f "${STATE_DIR}/alert-stalled-${safe}" 2>/dev/null || true
         sync_project_status "$project_dir" "review_clean" "window=${window}" "state=idle"
         # Telegram 通知 CLEAN
-        notify_review_result "✅ ${window} Review CLEAN 🟢 本轮迭代完成，代码质量达标！"
+        notify_review_result "$window" "✅ ${window} Review CLEAN 🟢 本轮迭代完成，代码质量达标！"
     fi
 
     # 记录 review commit 点
