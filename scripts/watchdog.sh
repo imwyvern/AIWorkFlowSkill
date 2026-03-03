@@ -577,7 +577,22 @@ handle_idle() {
     if is_prd_todo_complete "$project_dir" && [ "$has_pending_work" = "false" ]; then
         local review_file="${STATE_DIR}/layer2-review-${safe}.txt"
         if [ -f "$review_file" ] && ! grep -qi "CLEAN" "$review_file" 2>/dev/null; then
-            log "ℹ️ ${window}: PRD complete but review has issues, normal nudge"
+            # review issues 退避计数
+            local review_nudge_file="${STATE_DIR}/review-nudge-count-${safe}"
+            local review_nudge_count
+            review_nudge_count=$(cat "$review_nudge_file" 2>/dev/null || echo 0)
+            review_nudge_count=$(normalize_int "$review_nudge_count")
+            if [ "$review_nudge_count" -ge 5 ]; then
+                # 连续 5 次 nudge review issues 都没新 commit → 停止 nudge
+                if [ ! -f "${STATE_DIR}/review-issues-paused-${safe}" ]; then
+                    log "⏸ ${window}: review issues nudge 已达 5 次无新 commit，暂停 nudge（等待手动安排或新 commit）"
+                    touch "${STATE_DIR}/review-issues-paused-${safe}"
+                fi
+                prd_skip_nudge=true
+            else
+                echo $((review_nudge_count + 1)) > "$review_nudge_file"
+                log "ℹ️ ${window}: PRD complete but review has issues, nudge #$((review_nudge_count + 1))/5"
+            fi
         else
             if [ "$has_queue_task_early" = "true" ]; then
                 # 队列有任务 → 绕过 prd-done 冷却
@@ -808,7 +823,11 @@ handle_idle() {
             nudge_msg="PRD checker 未通过，先修复以下失败项：${prd_issues}"
             used_prd_issues_file=true
         else
-            nudge_msg=$(get_smart_nudge "$safe" "$project_dir")
+            # 没有明确任务（无 queue、无 issues、无 PRD 问题）→ 不 nudge
+            # 避免空转浪费 token。等手动安排任务或队列有新条目再 nudge
+            log "💤 ${window}: idle 但无待办任务，跳过 nudge"
+            release_lock "$safe"
+            return
         fi
 
         local nudge_reason="idle"
@@ -975,6 +994,9 @@ check_new_commits() {
 
     log "📝 ${window}: new commit (+${new_commits}, total since review: ${count}) — ${msg}"
     sync_project_status "$project_dir" "commit" "window=${window}" "head=${current_head}" "new_commits=${new_commits}" "since_review=${count}" "state=working"
+
+    # 新 commit → 重置 review issues 退避计数
+    rm -f "${STATE_DIR}/review-nudge-count-${safe}" "${STATE_DIR}/review-issues-paused-${safe}" 2>/dev/null || true
 
     # 队列任务完成检测：如果有进行中的队列任务，新 commit = 任务完成
     local queue_in_progress
