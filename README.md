@@ -136,26 +136,80 @@ Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
 
 | 脚本 | 行数 | 功能 |
 |------|------|------|
-| `scripts/watchdog.sh` | ~1200 | 主守护进程 — 状态检测、自动 nudge、权限处理、compact 恢复、任务队列调度 |
-| `scripts/codex-status.sh` | ~150 | Codex TUI 状态检测，输出 JSON (working/idle/permission/shell/absent) |
-| `scripts/tmux-send.sh` | ~230 | 三层消息发送：send-keys ≤300 / chunked ≤800 / paste-buffer >800 字符 |
+| `scripts/watchdog.sh` | ~1700 | 主守护进程 — 状态检测、智能 nudge、权限处理、compact 恢复、任务队列调度、任务追踪通知 |
+| `scripts/codex-status.sh` | ~200 | Codex TUI 状态检测（BFS 进程树），输出 JSON (working/idle/permission/shell/absent) |
+| `scripts/tmux-send.sh` | ~480 | 三层消息发送 + 任务追踪（`--track` 自动记录任务来源，watchdog 检测完成后通知） |
 | `scripts/monitor-all.sh` | ~450 | 10 分钟全局监控 + Telegram 报告（commit、context、lifecycle） |
-| `scripts/task-queue.sh` | ~200 | 任务队列 CRUD — 支持优先级、自动完成、失败重试 |
-| `scripts/consume-review-trigger.sh` | ~420 | Layer 2 代码审查消费者（触发文件驱动） |
-| `scripts/auto-nudge.sh` | ~140 | 独立 nudge 脚本（可单独调用） |
+| `scripts/task-queue.sh` | ~350 | 任务队列 CRUD — 支持优先级、并发锁、超时回收、来源追踪 |
+| `scripts/consume-review-trigger.sh` | ~450 | Layer 2 代码审查消费者（触发文件驱动，输出完整性检查） |
+| `scripts/discord-notify.sh` | ~180 | Discord 通知 — 按项目频道映射推送（config.yaml 驱动） |
+| `scripts/autopilot-lib.sh` | ~350 | 共享函数库 — 项目加载、Discord 映射、文件工具 |
+| `scripts/autopilot-constants.sh` | ~50 | 状态常量定义（版本、状态字符串） |
 | `scripts/prd_verify_engine.py` | ~500 | PRD 验证引擎 — checker 插件系统，"proof of done" |
 | `scripts/codex-token-daily.py` | ~380 | Token 用量统计（从 Codex JSONL 会话提取） |
-| `scripts/status-sync.sh` | ~200 | 项目状态自动同步到 status.json |
+
+### 智能 Nudge 决策树（v0.5.0）
+
+```
+Codex idle
+│
+├─ PRD 完成 + 无 pending issues？
+│   ├─ review 有问题？→ nudge #N/5（5 次退避上限，无 commit 则暂停）
+│   ├─ 队列有任务？→ 绕过冷却，消费队列
+│   └─ 真的没事 → 🛑 完全停止 nudge（不浪费 token）
+│
+├─ 优先级 1: compact 刚完成？→ 恢复 nudge（含上下文快照）
+├─ 优先级 2: 队列有任务？→ 消费队列，发任务给 Codex
+├─ 优先级 3: autocheck/PRD 有问题？→ nudge 修复
+├─ 兜底: 无任何待办 → 💤 跳过（不再用 smart nudge "找事做"）
+└─ dirty tree？→ 催提交（覆盖以上 nudge 内容）
+```
+
+**核心原则：有任务才 nudge，没任务就安静。**
+
+### 任务追踪与完成通知
+
+解决"说了'完成后通知你'但实际做不到"的问题：
+
+```
+用户安排任务 → tmux-send.sh（自动 --track）→ tracked-task.json 写入
+→ watchdog 每 10s 检查
+→ 新 commit + Codex idle = ✅ Discord 通知到来源频道
+→ 1 小时无进展 = ⚠️ "任务可能卡住" 通知
+```
+
+- 外部调用 tmux-send.sh 默认启用追踪
+- watchdog 内部调用自动关闭追踪（`--no-track`）
+- 任务来源（Discord 频道）自动从 config.yaml 映射
+
+### Discord ↔ Autopilot 路由
+
+```yaml
+# config.yaml
+discord_channels:
+  shike:
+    channel_id: "1473294169203150941"
+    tmux_window: "Shike"
+    project_dir: "/Users/wes/Shike"
+```
+
+- 项目完成 commit → 自动推送到对应 Discord 频道
+- 手动任务完成 → 通知回到来源频道
+- 支持 `--by-window` 反查频道
 
 ### 防护机制
 
 | 机制 | 说明 |
 |------|------|
-| **指数退避** | nudge 间隔 300→600→1200→2400→4800→9600s，6 次后停止 + Telegram 告警 |
+| **智能 nudge** | 无任务不 nudge，review issues 5 次退避，避免空转浪费 token |
+| **指数退避** | nudge 间隔 300→600→1200→2400→4800→9600s，6 次后停止 + 告警 |
 | **3 次 idle 确认** | 避免 API 延迟导致误判 |
 | **90s 工作惯性** | 刚检测到 working 的 90s 内不 nudge |
-| **手动任务保护** | 人工发送的任务 90s 内不被 watchdog 覆盖 |
-| **Compact 上下文快照** | compact 前保存任务状态（未提交文件、当前任务），compact 后精准恢复 |
+| **手动任务保护** | 人工发送的任务 300s 内不被 watchdog 覆盖 |
+| **任务追踪** | 手动任务自动追踪，完成/超时均通知用户 |
+| **队列并发锁** | mkdir 原子锁，防止并发读写损坏队列文件 |
+| **队列超时回收** | in-progress >3600s 自动 fail 重新入队 |
+| **Compact 上下文快照** | compact 前保存任务状态，compact 后精准恢复 |
 | **原子锁 (mkdir)** | macOS 无 flock，用 mkdir 实现带过期回收的原子锁 |
 | **运行时文件隔离** | status.json 等运行时文件 gitignore，避免 dirty repo 阻塞 Codex |
 
@@ -257,6 +311,8 @@ AIWorkFlowSkill/
 
 | 版本 | 日期 | 更新 |
 |------|------|------|
+| **0.5.0** | 2026-03-03 | 智能 nudge（无任务不 nudge）、任务追踪通知、Discord 路由、队列并发锁/超时回收、review 退避、BFS 进程树检测 |
+| **0.4.0** | 2026-03-01 | ClawHub 发布、Discord→Autopilot 路由、安全修复 |
 | **2.0.0** | 2026-02-12 | Autopilot 引擎: watchdog v6、三层 tmux 发送、任务队列、compact 上下文快照、PRD 验证引擎 |
 | 1.5.0 | 2026-01-19 | 集成 guo-yu/skills 工具；新增危险命令阻止列表 |
 | 1.4.1 | 2026-01-18 | 新增 testing skill；会话持久化与恢复 |
