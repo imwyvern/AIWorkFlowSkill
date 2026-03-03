@@ -18,7 +18,9 @@
 set -euo pipefail
 
 QUEUE_DIR="$HOME/.autopilot/task-queue"
-mkdir -p "$QUEUE_DIR"
+LOCK_DIR="$HOME/.autopilot/locks"
+QUEUE_LOCK_STALE_SECONDS="${QUEUE_LOCK_STALE_SECONDS:-120}"
+mkdir -p "$QUEUE_DIR" "$LOCK_DIR"
 
 sanitize() {
     echo "$1" | tr -cd 'a-zA-Z0-9_-'
@@ -33,6 +35,68 @@ queue_file() {
     local safe
     safe=$(sanitize "$project")
     echo "${QUEUE_DIR}/${safe}.md"
+}
+
+file_mtime() {
+    local f="$1"
+    if stat -f %m "$f" 2>/dev/null; then return; fi
+    stat -c %Y "$f" 2>/dev/null || echo 0
+}
+
+queue_lock_dir() {
+    local project="$1"
+    local safe
+    safe=$(sanitize "$project")
+    echo "${LOCK_DIR}/task-queue-${safe}.lock.d"
+}
+
+acquire_queue_lock() {
+    local project="$1"
+    local lock_path
+    lock_path=$(queue_lock_dir "$project")
+
+    if mkdir "$lock_path" 2>/dev/null; then
+        echo "$$" > "${lock_path}/pid"
+        return 0
+    fi
+
+    if [ -d "$lock_path" ]; then
+        local lock_age
+        lock_age=$(( $(date +%s) - $(file_mtime "$lock_path") ))
+        if [ "$lock_age" -gt "$QUEUE_LOCK_STALE_SECONDS" ]; then
+            rm -rf "$lock_path" 2>/dev/null || true
+            if mkdir "$lock_path" 2>/dev/null; then
+                echo "$$" > "${lock_path}/pid"
+                return 0
+            fi
+        fi
+    fi
+
+    return 1
+}
+
+release_queue_lock() {
+    local project="$1"
+    rm -rf "$(queue_lock_dir "$project")" 2>/dev/null || true
+}
+
+run_with_queue_lock() {
+    local project="$1"
+    shift || true
+
+    if ! acquire_queue_lock "$project"; then
+        echo "ERROR: 队列忙，稍后重试 (${project})" >&2
+        return 1
+    fi
+
+    local rc=0
+    set +e
+    "$@"
+    rc=$?
+    set -e
+
+    release_queue_lock "$project"
+    return "$rc"
 }
 
 extract_source_from_line() {
@@ -52,6 +116,54 @@ ensure_queue() {
 # States: [ ]=pending, [>]=in-progress, [x]=done, [!]=failed
 HEADER
     fi
+}
+
+_cmd_add_locked() {
+    local project="${1:?}"
+    local task="${2:?}"
+    local priority="${3:-normal}"
+    local source="${4:-}"
+
+    local file
+    file=$(queue_file "$project")
+    ensure_queue "$file"
+
+    local entry="- [ ] ${task} | added: $(now_iso)"
+    [ -n "$source" ] && entry="${entry} | source: ${source}"
+
+    if [ "$priority" = "high" ]; then
+        # 高优先级: 插入到第一个 [ ] 之前（python 处理，避免 sed UTF-8 问题）
+        python3 - "$file" "$entry" <<'PYEOF'
+import pathlib
+import sys
+
+f = pathlib.Path(sys.argv[1])
+entry = sys.argv[2]
+lines = f.read_text(encoding="utf-8").splitlines(keepends=True)
+inserted = False
+for i, line in enumerate(lines):
+    if line.startswith("- [ ]"):
+        lines.insert(i, entry + "\n")
+        inserted = True
+        break
+if not inserted:
+    lines.append(entry + "\n")
+f.write_text("".join(lines), encoding="utf-8")
+PYEOF
+    else
+        echo "$entry" >> "$file"
+    fi
+
+    # 新任务入队时立即重置 nudge 退避/暂停，确保 watchdog 可及时消费
+    local safe state_dir cooldown_dir
+    safe=$(sanitize "$project")
+    state_dir="$HOME/.autopilot/state"
+    cooldown_dir="${state_dir}/watchdog-cooldown"
+    mkdir -p "$cooldown_dir"
+    echo 0 > "${cooldown_dir}/nudge-count-${safe}" 2>/dev/null || true
+    rm -f "${state_dir}/nudge-paused-until-${safe}" 2>/dev/null || true
+
+    echo "OK: 任务已添加到 ${project} 队列"
 }
 
 cmd_add() {
@@ -87,37 +199,7 @@ cmd_add() {
         return 1
     fi
 
-    local file
-    file=$(queue_file "$project")
-    ensure_queue "$file"
-
-    local entry="- [ ] ${task} | added: $(now_iso)"
-    [ -n "$source" ] && entry="${entry} | source: ${source}"
-
-    if [ "$priority" = "high" ]; then
-        # 高优先级: 插入到第一个 [ ] 之前（python 处理，避免 sed UTF-8 问题）
-        python3 - "$file" "$entry" <<'PYEOF'
-import pathlib
-import sys
-
-f = pathlib.Path(sys.argv[1])
-entry = sys.argv[2]
-lines = f.read_text(encoding="utf-8").splitlines(keepends=True)
-inserted = False
-for i, line in enumerate(lines):
-    if line.startswith("- [ ]"):
-        lines.insert(i, entry + "\n")
-        inserted = True
-        break
-if not inserted:
-    lines.append(entry + "\n")
-f.write_text("".join(lines), encoding="utf-8")
-PYEOF
-    else
-        echo "$entry" >> "$file"
-    fi
-
-    echo "OK: 任务已添加到 ${project} 队列"
+    run_with_queue_lock "$project" _cmd_add_locked "$project" "$task" "$priority" "$source"
 }
 
 cmd_list() {
@@ -146,7 +228,7 @@ cmd_next() {
     echo "$line" | sed 's/^- \[ \] //; s/ | added:.*$//'
 }
 
-cmd_start() {
+_cmd_start_locked() {
     local project="${1:?}"
     local file
     file=$(queue_file "$project")
@@ -184,7 +266,12 @@ PYEOF
     echo "OK: 任务已标记为进行中"
 }
 
-cmd_done() {
+cmd_start() {
+    local project="${1:?}"
+    run_with_queue_lock "$project" _cmd_start_locked "$project"
+}
+
+_cmd_done_locked() {
     local project="${1:?}"
     local commit="${2:-}"
     local file
@@ -232,6 +319,12 @@ PYEOF
     else
         return 1
     fi
+}
+
+cmd_done() {
+    local project="${1:?}"
+    local commit="${2:-}"
+    run_with_queue_lock "$project" _cmd_done_locked "$project" "$commit"
 }
 
 # 队列任务完成后，检查 prd-todo.md 是否有对应项可以标记完成
@@ -282,7 +375,7 @@ sync_prd_todo() {
     fi
 }
 
-cmd_fail() {
+_cmd_fail_locked() {
     local project="${1:?}"
     local reason="${2:-unknown}"
     local file
@@ -313,6 +406,12 @@ PYEOF
     else
         return 1
     fi
+}
+
+cmd_fail() {
+    local project="${1:?}"
+    local reason="${2:-unknown}"
+    run_with_queue_lock "$project" _cmd_fail_locked "$project" "$reason"
 }
 
 cmd_count() {

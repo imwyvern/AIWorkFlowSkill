@@ -13,6 +13,7 @@
 #   get_discord_channel_for_window()  — 按窗口名查 Discord 频道名
 #   get_tmux_window_for_channel()     — 按 Discord 频道名查窗口名
 #   get_discord_channel_id_for_channel() — 按频道名查 Discord channel_id
+#   get_tmux_window_for_project_dir() — 按项目目录查 tmux 窗口名
 #   acquire_lock()         — mkdir-based lock with stale timeout
 #   release_lock()         — release mkdir lock
 #
@@ -457,6 +458,28 @@ get_discord_channel_id_for_channel() {
     return 1
 }
 
+get_tmux_window_for_project_dir() {
+    local project_dir="${1:-}"
+    local config_file="${2:-$(autopilot_default_config_yaml)}"
+    [ -n "$project_dir" ] || return 1
+
+    local target_dir="${project_dir%/}"
+    [ -n "$target_dir" ] || return 1
+
+    local cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir cfg_dir
+    while IFS=$'\t' read -r cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir || [ -n "$cfg_channel" ]; do
+        [ -n "$cfg_tmux_window" ] || continue
+        [ -n "$cfg_project_dir" ] || continue
+        cfg_dir="${cfg_project_dir%/}"
+        if [ "$cfg_dir" = "$target_dir" ]; then
+            echo "$cfg_tmux_window"
+            return 0
+        fi
+    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+
+    return 1
+}
+
 autopilot_derive_window_name_from_path() {
     local dir="${1:-}"
     dir="${dir%/}"
@@ -517,7 +540,10 @@ autopilot_load_projects_entries() {
                 [ "$dir" = "$line" ] && continue
             else
                 dir="$line"
-                window=$(autopilot_derive_window_name_from_path "$dir")
+                # project_dirs 模式下优先复用 discord_channels 里的 tmux_window 映射，
+                # 避免目录名（如 .autopilot）自动推导与真实窗口名（autopilot-dev）不一致。
+                window=$(get_tmux_window_for_project_dir "$dir" "$config_yaml_file" 2>/dev/null || true)
+                [ -n "$window" ] || window=$(autopilot_derive_window_name_from_path "$dir")
                 if [ "${#projects[@]}" -gt 0 ] && _autopilot_project_window_exists "$window" "${projects[@]}"; then
                     local suffix=2
                     local base_window="$window"
