@@ -2,11 +2,16 @@
 locks/
 logs/
 state/
+task-queue/
+cooldown/
+*.lock.d/
 prd-progress.json
 status.json
 state.json
 .last-review-commit
-task-queue/
+
+# Local config (contains sensitive tokens)
+config.yaml
 
 # OS
 .DS_Store
@@ -28,4 +33,8 @@ com.wes.codex-autopilot.plist
 NUDGE-GUARD-ANALYSIS.md
 PASTE-BUFFER-BUG.md
 tasks/
-config.yaml
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
