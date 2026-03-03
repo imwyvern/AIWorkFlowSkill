@@ -17,6 +17,7 @@ LAYER2_FALLBACK_COMMIT_WINDOW="${LAYER2_FALLBACK_COMMIT_WINDOW:-30}"
 TSC_TIMEOUT_SECONDS="${TSC_TIMEOUT_SECONDS:-30}"
 REVIEW_OUTPUT_WAIT_SECONDS="${REVIEW_OUTPUT_WAIT_SECONDS:-90}"
 REVIEW_TRIGGER_STALE_SECONDS="${REVIEW_TRIGGER_STALE_SECONDS:-7200}"
+REVIEW_OUTPUT_STABLE_SECONDS="${REVIEW_OUTPUT_STABLE_SECONDS:-10}"
 COOLDOWN_DIR="${STATE_DIR:-$HOME/.autopilot/state}/watchdog-cooldown"
 MAX_REVIEW_RETRIES=3
 
@@ -92,6 +93,19 @@ wait_for_non_empty_file() {
     done
 
     return 1
+}
+
+is_review_output_stable() {
+    local file="$1"
+    [ -s "$file" ] || return 1
+
+    local mtime age
+    mtime=$(file_mtime "$file" 2>/dev/null || echo 0)
+    mtime=$(normalize_int "$mtime")
+    [ "$mtime" -gt 0 ] || return 1
+
+    age=$(( $(now_ts) - mtime ))
+    [ "$age" -ge "$REVIEW_OUTPUT_STABLE_SECONDS" ]
 }
 
 is_layer2_output_clean() {
@@ -191,7 +205,7 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
         rm -f "$trigger_file"
         continue
     fi
-    trigger_mtime=$(stat -f %m "$trigger_file" 2>/dev/null || echo 0)
+    trigger_mtime=$(file_mtime "$trigger_file" 2>/dev/null || echo 0)
     trigger_age=$(( $(now_ts) - trigger_mtime ))
     stale_trigger=false
     if [ "$trigger_age" -ge "$REVIEW_TRIGGER_STALE_SECONDS" ]; then
@@ -212,14 +226,19 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
     # 检查是否已有 in-progress review（防重复发送）
     in_progress_file="${STATE_DIR}/review-in-progress-${safe}"
     if [ -f "$in_progress_file" ]; then
-        ip_age=$(( $(now_ts) - $(stat -f %m "$in_progress_file" 2>/dev/null || echo 0) ))
+        ip_age=$(( $(now_ts) - $(file_mtime "$in_progress_file" 2>/dev/null || echo 0) ))
         if [ "$ip_age" -lt 600 ]; then
             # 10 分钟内已发送 review，等待结果
             if [ -s "$review_output_file" ]; then
-                # 输出文件已有内容，标记完成
-                rm -f "$in_progress_file"
-                reuse_existing_output=true
-                log "✅ ${safe}: review output received after ${ip_age}s"
+                # 输出文件存在但可能还在写入，要求稳定一段时间再消费
+                if is_review_output_stable "$review_output_file"; then
+                    rm -f "$in_progress_file"
+                    reuse_existing_output=true
+                    log "✅ ${safe}: review output received after ${ip_age}s"
+                else
+                    log "⏭ ${safe}: review output not stable yet, wait ${REVIEW_OUTPUT_STABLE_SECONDS}s"
+                    continue
+                fi
             else
                 log "⏭ ${safe}: review in-progress (${ip_age}s), waiting for output"
                 continue
@@ -329,6 +348,11 @@ for trigger_file in "${STATE_DIR}"/review-trigger-*; do
             # 不再阻塞等待 — 由 in-progress 机制在下轮检查输出
             if [ ! -s "$review_output_file" ]; then
                 log "⏭ ${safe}: review sent, waiting for output (in-progress)"
+                continue
+            fi
+
+            if ! is_review_output_stable "$review_output_file"; then
+                log "⏭ ${safe}: review output not stable yet, keep in-progress"
                 continue
             fi
             rm -f "$in_progress_file"

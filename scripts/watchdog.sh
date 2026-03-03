@@ -50,6 +50,7 @@ COMMIT_COUNT_DIR="$STATE_DIR/watchdog-commits"
 REVIEW_COOLDOWN=7200       # 增量 review 冷却（秒）= 2 小时
 COMMITS_FOR_REVIEW=15      # 触发增量 review 的 commit 数
 FEAT_WITHOUT_TEST_LIMIT=5  # 连续 feat 无 test 触发写测试 nudge
+QUEUE_IN_PROGRESS_TIMEOUT_SECONDS="${QUEUE_IN_PROGRESS_TIMEOUT_SECONDS:-3600}"
 PRD_DONE_FILTER_RE='✅\|⛔\|blocked\|（done）\|(done)\|done\|完成\|^\- \[x\]\|^\- \[X\]'
 mkdir -p "$(dirname "$LOG")" "$LOCK_DIR" "$COOLDOWN_DIR" "$ACTIVITY_DIR" "$COMMIT_COUNT_DIR"
 
@@ -97,7 +98,9 @@ detect_prd_todo_changes() {
 }
 
 is_prd_todo_complete() {
-    [ "$(count_prd_todo_remaining "$1")" -eq 0 ]
+    local project_dir="$1"
+    [ -f "${project_dir}/prd-todo.md" ] || return 1
+    [ "$(count_prd_todo_remaining "$project_dir")" -eq 0 ]
 }
 
 # ---- 项目配置 ----
@@ -258,6 +261,54 @@ send_discord_by_window() {
         "${SCRIPT_DIR}/discord-notify.sh" "$discord_channel" "$text" >/dev/null 2>&1 \
             || log "⚠️ ${window}: discord notify failed"
     ) &
+}
+
+parse_iso_minute_to_ts() {
+    local datetime="${1:-}"
+    local ts=0
+    [ -n "$datetime" ] || { echo 0; return 1; }
+
+    if ts=$(date -j -f '%Y-%m-%d %H:%M' "$datetime" +%s 2>/dev/null); then
+        echo "$ts"
+        return 0
+    fi
+    if ts=$(date -d "$datetime" +%s 2>/dev/null); then
+        echo "$ts"
+        return 0
+    fi
+
+    echo 0
+    return 1
+}
+
+recover_stale_queue_in_progress() {
+    local window="$1" safe="$2"
+    local queue_file="${HOME}/.autopilot/task-queue/${safe}.md"
+    [ -f "$queue_file" ] || return 0
+
+    local in_progress_line started_at started_ts now_val age
+    in_progress_line=$(grep -m1 '^\- \[→\]' "$queue_file" 2>/dev/null || true)
+    [ -n "$in_progress_line" ] || return 0
+
+    started_at=$(printf '%s\n' "$in_progress_line" \
+        | sed -n 's/^.* | started: \([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}\).*/\1/p' \
+        | head -n1)
+    [ -n "$started_at" ] || return 0
+
+    started_ts=$(parse_iso_minute_to_ts "$started_at" 2>/dev/null || echo 0)
+    started_ts=$(normalize_int "$started_ts")
+    [ "$started_ts" -gt 0 ] || return 0
+
+    now_val=$(now_ts)
+    age=$((now_val - started_ts))
+    if [ "$age" -lt "$QUEUE_IN_PROGRESS_TIMEOUT_SECONDS" ]; then
+        return 0
+    fi
+
+    if "${SCRIPT_DIR}/task-queue.sh" fail "$safe" "in-progress-timeout-${age}s" >/dev/null 2>&1; then
+        log "♻️ ${window}: queue in-progress stale (${age}s), auto requeued"
+        send_telegram "♻️ ${window}: 队列任务超时 ${age}s，已自动重新入队。"
+    fi
 }
 
 start_nudge_ack_check() {
@@ -838,6 +889,8 @@ handle_idle() {
             | grep -v 'status\.json' \
             | grep -v 'prd-progress\.json' \
             | grep -v '\.code-review/' \
+            | grep -v '\.DS_Store$' \
+            | grep -v '\.last-review-commit$' \
             | grep -v 'locks/' \
             | grep -v 'logs/' \
             | grep -v 'state/' \
@@ -1357,6 +1410,9 @@ while true; do
         safe=$(sanitize "$window")
 
         state=$(detect_state "$window" "$safe")
+
+        # 队列保护：进行中任务超时自动回收，避免 [→] 长期僵死
+        recover_stale_queue_in_progress "$window" "$safe"
 
         # 每 30 轮（~5 分钟）记录一次状态
         if [ $((cycle % 30)) -eq 0 ] && [ "$cycle" -gt 0 ]; then
