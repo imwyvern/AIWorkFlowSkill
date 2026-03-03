@@ -17,6 +17,12 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${SCRIPT_DIR}/autopilot-lib.sh" ]; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/autopilot-lib.sh"
+fi
+
 QUEUE_DIR="$HOME/.autopilot/task-queue"
 LOCK_DIR="$HOME/.autopilot/locks"
 QUEUE_LOCK_STALE_SECONDS="${QUEUE_LOCK_STALE_SECONDS:-120}"
@@ -333,8 +339,24 @@ sync_prd_todo() {
     
     # 找到项目目录
     local project_dir=""
+    local config_yaml="$HOME/.autopilot/config.yaml"
     local conf="$HOME/.autopilot/watchdog-projects.conf"
-    if [ -f "$conf" ]; then
+    if declare -F autopilot_load_projects_entries >/dev/null 2>&1; then
+        local entry w d w_safe
+        while IFS= read -r entry || [ -n "$entry" ]; do
+            [ -n "$entry" ] || continue
+            w="${entry%%:*}"
+            d="${entry#*:}"
+            [ "$d" = "$entry" ] && continue
+            w_safe=$(sanitize "$w")
+            if [ "$w_safe" = "$project" ]; then
+                project_dir="$d"
+                break
+            fi
+        done < <(autopilot_load_projects_entries "$config_yaml" "$conf" 2>/dev/null || true)
+    fi
+
+    if [ -z "$project_dir" ] && [ -f "$conf" ]; then
         while IFS=: read -r w d _rest; do
             local w_safe
             w_safe=$(sanitize "$w")

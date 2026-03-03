@@ -311,6 +311,7 @@ autopilot_parse_discord_channels_from_config_yaml() {
         in_discord = 0
         discord_indent = -1
         saw_discord = 0
+        parse_error = 0
         parsed_count = 0
         reset_item()
     }
@@ -348,13 +349,19 @@ autopilot_parse_discord_channels_from_config_yaml() {
         raw_value = trim(substr(content, split_pos + 1))
         value = strip_quotes(trim(strip_inline_comment(raw_value)))
 
+        is_known_field = (key == "channel_id" || key == "tmux_window" || key == "project_dir" || key == "dir" || key == "path")
         if (raw_value == "" || value == "") {
-            if (current_name != "" && indent <= current_indent) flush_item()
-            current_name = key
-            current_channel_id = ""
-            current_tmux_window = ""
-            current_project_dir = ""
-            current_indent = indent
+            # 仅“频道名:”允许空值，表示开始新条目；字段空值视为解析错误。
+            if (current_name == "" || indent <= current_indent) {
+                flush_item()
+                current_name = key
+                current_channel_id = ""
+                current_tmux_window = ""
+                current_project_dir = ""
+                current_indent = indent
+            } else if (is_known_field) {
+                parse_error = 1
+            }
             next
         }
 
@@ -376,7 +383,7 @@ autopilot_parse_discord_channels_from_config_yaml() {
     END {
         if (in_discord == 1) flush_item()
         if (saw_discord == 0) exit 10
-        if (parsed_count == 0) exit 11
+        if (parse_error != 0 || parsed_count == 0) exit 11
     }
     ' "$config_file"
 }
@@ -388,6 +395,8 @@ get_discord_channel_for_window() {
 
     local safe_window
     safe_window=$(sanitize "$window")
+    local parsed_channels
+    parsed_channels=$(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null) || return 1
 
     local channel_name channel_id tmux_window project_dir safe_tmux_window
     while IFS=$'\t' read -r channel_name channel_id tmux_window project_dir || [ -n "$channel_name" ]; do
@@ -401,7 +410,7 @@ get_discord_channel_for_window() {
             echo "$channel_name"
             return 0
         fi
-    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+    done <<< "$parsed_channels"
 
     return 1
 }
@@ -413,6 +422,8 @@ get_tmux_window_for_channel() {
 
     local target_channel_lower
     target_channel_lower=$(printf '%s' "$channel_name" | tr '[:upper:]' '[:lower:]')
+    local parsed_channels
+    parsed_channels=$(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null) || return 1
 
     local cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir cfg_channel_lower
     while IFS=$'\t' read -r cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir || [ -n "$cfg_channel" ]; do
@@ -426,7 +437,7 @@ get_tmux_window_for_channel() {
             echo "$cfg_tmux_window"
             return 0
         fi
-    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+    done <<< "$parsed_channels"
 
     return 1
 }
@@ -438,6 +449,8 @@ get_discord_channel_id_for_channel() {
 
     local target_channel_lower
     target_channel_lower=$(printf '%s' "$channel_name" | tr '[:upper:]' '[:lower:]')
+    local parsed_channels
+    parsed_channels=$(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null) || return 1
 
     local cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir cfg_channel_lower
     while IFS=$'\t' read -r cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir || [ -n "$cfg_channel" ]; do
@@ -453,7 +466,7 @@ get_discord_channel_id_for_channel() {
             echo "$cfg_channel_id"
             return 0
         fi
-    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+    done <<< "$parsed_channels"
 
     return 1
 }
@@ -465,6 +478,8 @@ get_tmux_window_for_project_dir() {
 
     local target_dir="${project_dir%/}"
     [ -n "$target_dir" ] || return 1
+    local parsed_channels
+    parsed_channels=$(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null) || return 1
 
     local cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir cfg_dir
     while IFS=$'\t' read -r cfg_channel cfg_channel_id cfg_tmux_window cfg_project_dir || [ -n "$cfg_channel" ]; do
@@ -475,7 +490,7 @@ get_tmux_window_for_project_dir() {
             echo "$cfg_tmux_window"
             return 0
         fi
-    done < <(autopilot_parse_discord_channels_from_config_yaml "$config_file" 2>/dev/null || true)
+    done <<< "$parsed_channels"
 
     return 1
 }
