@@ -581,7 +581,8 @@ maybe_trigger_test_agent_on_review_clean() {
     local review_file review_mtime stamp_file last_mtime
     review_file="${STATE_DIR}/layer2-review-${safe}.txt"
     [ -f "$review_file" ] || return 0
-    grep -qi "CLEAN" "$review_file" 2>/dev/null || return 0
+    # 严格匹配 CLEAN（避免 cleanup/not clean 误命中）
+    grep -qiE '^\s*CLEAN\s*$|结论.*CLEAN|status.*CLEAN' "$review_file" 2>/dev/null || return 0
 
     review_mtime=$(file_mtime "$review_file")
     review_mtime=$(normalize_int "$review_mtime")
@@ -606,7 +607,7 @@ maybe_trigger_test_agent_on_review_clean() {
         trap 'rm -rf "'"$trigger_lock"'"' EXIT
         local out_file out_json
         out_file="${HOME}/.autopilot/logs/test-agent-${safe}.log"
-        out_json=$("$TEST_AGENT_SCRIPT" enqueue "$project_dir" "$window" "review_clean" >> "$out_file" 2>&1 || true)
+        out_json=$("$TEST_AGENT_SCRIPT" enqueue "$project_dir" "$window" "review_clean" 2>>"$out_file" || true)
 
         if [ -n "$out_json" ] && echo "$out_json" | jq -e . >/dev/null 2>&1; then
             local enqueued

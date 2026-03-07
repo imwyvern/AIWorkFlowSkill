@@ -252,7 +252,8 @@ PYEOF
 queue_has_similar_test_task() {
     local queue_file="$1" file_path="$2"
     [ -f "$queue_file" ] || return 1
-    grep -E '^\- \[( |→)\].*\| type: test' "$queue_file" 2>/dev/null | grep -F "$file_path" >/dev/null 2>&1
+    # 精确匹配文件路径（避免 src/a.ts 误匹配 src/a.tsx）
+    grep -E '^\- \[( |→)\].*\| type: test' "$queue_file" 2>/dev/null | grep -F " ${file_path}" | grep -qvE "${file_path}[a-zA-Z0-9_.]" 2>/dev/null
 }
 
 test_agent_evaluate() {
