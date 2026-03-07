@@ -116,6 +116,12 @@ DEFAULT_PROJECTS=(
     "replyher_android-2:/Users/wes/replyher_android-2"
 )
 PROJECTS=()
+BRANCH_MANAGER="${SCRIPT_DIR}/branch-manager.sh"
+BRANCH_ISOLATION_ENABLED="true"
+BRANCH_AUTO_MERGE_ENABLED="true"
+BRANCH_REQUIRE_AUTO_CHECK="true"
+BRANCH_REQUIRE_TESTS="false"
+BRANCH_BASE_BRANCH="main"
 
 # ---- 工具函数 ----
 log() {
@@ -185,14 +191,80 @@ load_projects() {
     esac
 }
 
+load_branch_isolation_config() {
+    local config_file="$CONFIG_YAML_FILE"
+    [ -f "$config_file" ] || return 0
+
+    local enabled_val auto_merge_enabled_val require_auto_check_val require_tests_val base_branch_val
+    enabled_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*enabled:[[:space:]]*/ {
+            sub(/^[[:space:]]*enabled:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    base_branch_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*base_branch:[[:space:]]*/ {
+            sub(/^[[:space:]]*base_branch:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    auto_merge_enabled_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*auto_merge:[[:space:]]*$/ {in_auto=1; next}
+        in_auto && /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/ && $0 !~ /^[[:space:]]*enabled:[[:space:]]*/ {next}
+        in_auto && /^[[:space:]]*enabled:[[:space:]]*/ {
+            sub(/^[[:space:]]*enabled:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    require_auto_check_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*auto_merge:[[:space:]]*$/ {in_auto=1; next}
+        in_auto && /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/ && $0 !~ /^[[:space:]]*require_auto_check:[[:space:]]*/ {next}
+        in_auto && /^[[:space:]]*require_auto_check:[[:space:]]*/ {
+            sub(/^[[:space:]]*require_auto_check:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    require_tests_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*auto_merge:[[:space:]]*$/ {in_auto=1; next}
+        in_auto && /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/ && $0 !~ /^[[:space:]]*require_tests:[[:space:]]*/ {next}
+        in_auto && /^[[:space:]]*require_tests:[[:space:]]*/ {
+            sub(/^[[:space:]]*require_tests:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+
+    enabled_val=$(echo "${enabled_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
+    auto_merge_enabled_val=$(echo "${auto_merge_enabled_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
+    require_auto_check_val=$(echo "${require_auto_check_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
+    require_tests_val=$(echo "${require_tests_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
+    base_branch_val=$(echo "${base_branch_val:-}" | sed 's/[[:space:]]*#.*$//' | tr -d ' "'\''')
+
+    case "$enabled_val" in true|1|yes|on) BRANCH_ISOLATION_ENABLED="true" ;; false|0|no|off) BRANCH_ISOLATION_ENABLED="false" ;; esac
+    case "$auto_merge_enabled_val" in true|1|yes|on) BRANCH_AUTO_MERGE_ENABLED="true" ;; false|0|no|off) BRANCH_AUTO_MERGE_ENABLED="false" ;; esac
+    case "$require_auto_check_val" in true|1|yes|on) BRANCH_REQUIRE_AUTO_CHECK="true" ;; false|0|no|off) BRANCH_REQUIRE_AUTO_CHECK="false" ;; esac
+    case "$require_tests_val" in true|1|yes|on) BRANCH_REQUIRE_TESTS="true" ;; false|0|no|off) BRANCH_REQUIRE_TESTS="false" ;; esac
+    [ -n "$base_branch_val" ] && BRANCH_BASE_BRANCH="$base_branch_val"
+}
+
 send_tmux_message() {
     local window="$1" message="$2" action="$3"
+    local task_type="${4:-}"
+    local branch_mode="${5:-off}"
     local output rc
     local safe_w
     safe_w=$(echo "$window" | tr -cd 'a-zA-Z0-9_-')
 
     # watchdog 自动发送不应写 tracked-task，避免与人工任务追踪混淆。
-    output=$("$SCRIPT_DIR/tmux-send.sh" --no-track "$window" "$message" 2>&1)
+    if [ -n "$task_type" ]; then
+        output=$("$SCRIPT_DIR/tmux-send.sh" --no-track --branch-mode "$branch_mode" --task-type "$task_type" "$window" "$message" 2>&1)
+    else
+        output=$("$SCRIPT_DIR/tmux-send.sh" --no-track --branch-mode off "$window" "$message" 2>&1)
+    fi
     rc=$?
     # 清除 tmux-send 写的 manual-task 标记（这是 watchdog 自己发的，不是人工的）
     rm -f "${STATE_DIR}/manual-task-${safe_w}" 2>/dev/null
@@ -243,6 +315,21 @@ extract_json_number() {
         value=-1
     fi
     echo "$value"
+}
+
+sanitize_branch_for_key() {
+    local branch="${1:-}"
+    echo "$branch" | sed 's#[^a-zA-Z0-9_.-]#_#g'
+}
+
+extract_queue_meta_from_line() {
+    local line="${1:-}" key="${2:-}"
+    [ -n "$line" ] || return 1
+    [ -n "$key" ] || return 1
+    printf '%s\n' "$line" \
+        | sed -n "s/^.* | ${key}: \\([^|]*\\).*$/\\1/p" \
+        | sed 's/[[:space:]]*$//' \
+        | head -n1
 }
 
 send_telegram_alert() {
@@ -939,6 +1026,15 @@ handle_idle() {
         local queue_task
         queue_task=$("${SCRIPT_DIR}/task-queue.sh" next "$safe" 2>/dev/null || true)
         if [ -n "$queue_task" ]; then
+            local queue_task_type queue_pending_line queue_file
+            queue_task_type="task"
+            queue_file="${HOME}/.autopilot/task-queue/${safe}.md"
+            queue_pending_line=$(grep -m1 '^\- \[ \]' "$queue_file" 2>/dev/null || true)
+            if [ -n "$queue_pending_line" ]; then
+                queue_task_type=$(extract_queue_meta_from_line "$queue_pending_line" "type" 2>/dev/null || echo "task")
+                [ -n "$queue_task_type" ] || queue_task_type="task"
+            fi
+
             if [ "$weekly_limit_exhausted" = "true" ]; then
                 # Codex 额度耗尽 → 用 Claude AgentTeam 替代
                 "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
@@ -951,11 +1047,11 @@ handle_idle() {
             else
                 # 正常 Codex 派发
                 nudge_msg="${queue_task:0:280}"
-                if send_tmux_message "$window" "$nudge_msg" "queue task"; then
+                if send_tmux_message "$window" "$nudge_msg" "queue task" "$queue_task_type" "auto"; then
                     "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
                     set_cooldown "$key"
                     echo 0 > "$nudge_count_file"  # 队列任务重置退避计数
-                    log "📋 ${window}: queue task sent — ${nudge_msg:0:80}"
+                    log "📋 ${window}: queue task sent(type=${queue_task_type}) — ${nudge_msg:0:80}"
                     start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "queue task"
                     sync_project_status "$project_dir" "queue_task_sent" "window=${window}" "state=idle"
                     send_telegram "📋 ${window}: 开始处理队列任务 — ${nudge_msg:0:100}"
@@ -1138,24 +1234,152 @@ get_head() {
     git -C "$dir" rev-parse HEAD 2>/dev/null || echo "none"
 }
 
+attempt_branch_auto_merge_if_ready() {
+    local window="$1" safe="$2" project_dir="$3" state="$4"
+    local current_branch="$5" queue_task_branch="$6" queue_task_base="$7"
+    local commit_msg="${8:-}" current_head="${9:-}"
+
+    [ -n "$queue_task_branch" ] || return 1
+    [[ "$queue_task_branch" == ap/* ]] || return 1
+    [ "$current_branch" = "$queue_task_branch" ] || return 1
+    is_idle_state_for_tracked_completion "$state" || return 1
+    [ "$BRANCH_ISOLATION_ENABLED" = "true" ] || return 1
+    [ "$BRANCH_AUTO_MERGE_ENABLED" = "true" ] || return 1
+    [ -x "$BRANCH_MANAGER" ] || return 1
+
+    local merge_base ahead_count
+    merge_base="${queue_task_base:-$BRANCH_BASE_BRANCH}"
+    ahead_count=$(run_with_timeout 10 git -C "$project_dir" rev-list "${merge_base}..${queue_task_branch}" --count 2>/dev/null || echo 0)
+    ahead_count=$(normalize_int "$ahead_count")
+    [ "$ahead_count" -gt 0 ] || return 1
+
+    local merge_gate_ok=true gate_output gate_rc
+    if [ "$BRANCH_REQUIRE_AUTO_CHECK" = "true" ]; then
+        gate_output=$("${SCRIPT_DIR}/auto-check.sh" "$project_dir" --issues-only 2>&1)
+        gate_rc=$?
+        if [ "$gate_rc" -ne 0 ]; then
+            merge_gate_ok=false
+            if [ -n "$gate_output" ]; then
+                echo "$gate_output" > "${STATE_DIR}/autocheck-issues-${safe}.tmp" \
+                    && mv -f "${STATE_DIR}/autocheck-issues-${safe}.tmp" "${STATE_DIR}/autocheck-issues-${safe}"
+            fi
+            log "⏭ ${window}: branch merge gated by auto-check issues (${queue_task_branch})"
+        fi
+    fi
+    if [ "$BRANCH_REQUIRE_TESTS" = "true" ]; then
+        # Phase 1 暂不强制标准化测试门禁，仅记录配置告警，避免阻塞主流程。
+        log "ℹ️ ${window}: require_tests=true（Phase 1 暂未接入统一测试门禁）"
+    fi
+
+    [ "$merge_gate_ok" = "true" ] || return 0
+
+    local merge_json merge_status merge_head merge_reason
+    merge_json=$("$BRANCH_MANAGER" auto-merge "$project_dir" "$safe" "$queue_task_branch" "$merge_base" 2>/dev/null || true)
+    if command -v jq >/dev/null 2>&1; then
+        merge_status=$(echo "$merge_json" | jq -r '.status // ""' 2>/dev/null || echo "")
+        merge_head=$(echo "$merge_json" | jq -r '.head // ""' 2>/dev/null || echo "")
+        merge_reason=$(echo "$merge_json" | jq -r '.reason // ""' 2>/dev/null || echo "")
+    else
+        merge_status=$(echo "$merge_json" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+        merge_head=$(echo "$merge_json" | sed -n 's/.*"head"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+        merge_reason=$(echo "$merge_json" | sed -n 's/.*"reason"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+    fi
+
+    case "$merge_status" in
+        merged)
+            [ -n "$merge_head" ] || merge_head=$(run_with_timeout 10 git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "$current_head")
+            local queue_done_output queue_source remaining done_msg discord_done_msg display_msg
+            queue_done_output=$("${SCRIPT_DIR}/task-queue.sh" done "$safe" "${merge_head:0:7}" 2>/dev/null || true)
+            queue_source=$(printf '%s\n' "$queue_done_output" | sed -n 's/^SOURCE: //p' | head -n1 | tr -d '\r')
+            remaining=$("${SCRIPT_DIR}/task-queue.sh" count "$safe" 2>/dev/null || echo 0)
+            remaining=$(normalize_int "$remaining")
+            display_msg="$commit_msg"
+            [ -n "$display_msg" ] || display_msg=$(run_with_timeout 10 git -C "$project_dir" log -1 --format="%s" "$merge_head" 2>/dev/null || echo "")
+
+            done_msg="✅ ${window}: 分支任务已合并 (${merge_head:0:7}) — ${display_msg:0:80}"
+            [ "$remaining" -gt 0 ] && done_msg="${done_msg}\n📋 还剩 ${remaining} 个任务待处理"
+            send_telegram "$done_msg"
+
+            discord_done_msg="✅ ${window}: 分支任务已合并 (${merge_head:0:7}) — ${display_msg:0:80}"
+            [ "$remaining" -gt 0 ] && discord_done_msg="${discord_done_msg} | 还剩 ${remaining} 个任务"
+            [ -n "$queue_source" ] && discord_done_msg="${discord_done_msg} | source: ${queue_source}"
+            send_discord_by_window "$window" "$discord_done_msg"
+            log "🌿✅ ${window}: branch auto-merged (${queue_task_branch} -> ${merge_base})"
+            return 0
+            ;;
+        conflict)
+            "${SCRIPT_DIR}/task-queue.sh" fail "$safe" "branch-merge-conflict" >/dev/null 2>&1 || true
+            "${SCRIPT_DIR}/task-queue.sh" add "$safe" \
+                "解决分支冲突并完成合并：${queue_task_branch} -> ${merge_base}" \
+                high --type review_fix >/dev/null 2>&1 || true
+            send_telegram "⚠️ ${window}: 分支自动合并冲突，已入队冲突修复任务（${queue_task_branch}）"
+            send_discord_by_window "$window" "⚠️ ${window}: 分支自动合并冲突，已入队冲突修复任务（${queue_task_branch}）"
+            log "⚠️ ${window}: branch auto-merge conflict (${queue_task_branch}, reason=${merge_reason:-unknown})"
+            return 0
+            ;;
+        *)
+            log "⚠️ ${window}: branch auto-merge failed (${queue_task_branch}, status=${merge_status:-unknown}, reason=${merge_reason:-unknown})"
+            return 1
+            ;;
+    esac
+}
+
 # 检测新 commit 并运行自动检查
 check_new_commits() {
-    local window="$1" safe="$2" project_dir="$3"
-    local head_file="${COMMIT_COUNT_DIR}/${safe}-head"
+    local window="$1" safe="$2" project_dir="$3" state="${4:-$CODEX_STATE_IDLE}"
     local count_file="${COMMIT_COUNT_DIR}/${safe}-since-review"
+    local legacy_head_file="${COMMIT_COUNT_DIR}/${safe}-head"
 
-    local current_head
+    local current_head current_branch branch_key head_file
     current_head=$(run_with_timeout 10 git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "none")
     [ "$current_head" = "none" ] && return
+    current_branch=$(run_with_timeout 10 git -C "$project_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "detached")
+    branch_key=$(sanitize_branch_for_key "$current_branch")
+    [ -n "$branch_key" ] || branch_key="detached"
+    head_file="${COMMIT_COUNT_DIR}/${safe}-${branch_key}-head"
 
     local last_head
     last_head=$(cat "$head_file" 2>/dev/null || echo "none")
+    if [ "$last_head" = "none" ]; then
+        last_head=$(cat "$legacy_head_file" 2>/dev/null || echo "none")
+    fi
+
+    # 队列任务信息（包含 branch 隔离 metadata）
+    local queue_file queue_in_progress queue_in_progress_line queue_task_branch queue_task_base queue_source
+    queue_file="${HOME}/.autopilot/task-queue/${safe}.md"
+    queue_in_progress_line=$(grep -m1 '^\- \[→\]' "$queue_file" 2>/dev/null || true)
+    queue_in_progress=$(normalize_int "$(grep -c '^\- \[→\]' "$queue_file" 2>/dev/null || echo 0)")
+    if [ "$queue_in_progress" -gt 0 ]; then
+        queue_task_branch=$(extract_queue_meta_from_line "$queue_in_progress_line" "task_branch" 2>/dev/null || true)
+        queue_task_base=$(extract_queue_meta_from_line "$queue_in_progress_line" "base_branch" 2>/dev/null || true)
+        if [ -z "$queue_task_branch" ] && command -v jq >/dev/null 2>&1; then
+            local branch_state_file branch_state
+            branch_state_file="${STATE_DIR}/branches/${safe}.json"
+            if [ -f "$branch_state_file" ] && jq -e . "$branch_state_file" >/dev/null 2>&1; then
+                branch_state=$(jq -r '.state // ""' "$branch_state_file" 2>/dev/null || echo "")
+                case "$branch_state" in
+                    created|in_progress|ready_merge)
+                        queue_task_branch=$(jq -r '.active_branch // ""' "$branch_state_file" 2>/dev/null || echo "")
+                        queue_task_base=$(jq -r '.base_branch // ""' "$branch_state_file" 2>/dev/null || echo "")
+                        ;;
+                esac
+            fi
+        fi
+    fi
 
     # 没有新 commit
-    [ "$current_head" = "$last_head" ] && return
+    if [ "$current_head" = "$last_head" ]; then
+        if [ "$queue_in_progress" -gt 0 ]; then
+            attempt_branch_auto_merge_if_ready \
+                "$window" "$safe" "$project_dir" "$state" \
+                "$current_branch" "$queue_task_branch" "$queue_task_base" "" "$current_head" || true
+        fi
+        return
+    fi
 
-    # 记录新 head
+    # 记录新 head（分支维度 + 兼容旧路径）
     echo "$current_head" > "$head_file"
+    echo "$current_head" > "$legacy_head_file"
 
     # P0-1 fix: 有新 commit 说明刚在工作，重置 activity 时间戳
     update_activity "$safe"
@@ -1180,38 +1404,39 @@ check_new_commits() {
     local msg
     msg=$(git -C "$project_dir" log -1 --format="%s" 2>/dev/null || echo "")
 
-    log "📝 ${window}: new commit (+${new_commits}, total since review: ${count}) — ${msg}"
+    log "📝 ${window}: new commit on ${current_branch} (+${new_commits}, total since review: ${count}) — ${msg}"
     sync_project_status "$project_dir" "commit" "window=${window}" "head=${current_head}" "new_commits=${new_commits}" "since_review=${count}" "state=working"
 
     # 新 commit → 重置 review issues 退避计数
     rm -f "${STATE_DIR}/review-nudge-count-${safe}" "${STATE_DIR}/review-issues-paused-${safe}" 2>/dev/null || true
 
-    # 队列任务完成检测：如果有进行中的队列任务，新 commit = 任务完成
-    local queue_in_progress
-    queue_in_progress=$(grep -c '^\- \[→\]' "${HOME}/.autopilot/task-queue/${safe}.md" 2>/dev/null || true)
-    queue_in_progress=$(normalize_int "$queue_in_progress")
+    # 队列任务完成检测：支持普通任务与 branch 隔离任务两种路径
     if [ "$queue_in_progress" -gt 0 ]; then
-        local queue_done_output queue_source
-        queue_done_output=$("${SCRIPT_DIR}/task-queue.sh" done "$safe" "${current_head:0:7}" 2>/dev/null || true)
-        queue_source=$(printf '%s\n' "$queue_done_output" | sed -n 's/^SOURCE: //p' | head -n1 | tr -d '\r')
-        log "📋✅ ${window}: queue task completed (commit ${current_head:0:7})"
-        # 检查是否还有更多队列任务
-        local remaining
-        remaining=$("${SCRIPT_DIR}/task-queue.sh" count "$safe" 2>/dev/null || echo 0)
-        remaining=$(normalize_int "$remaining")
-        if [ "$remaining" -gt 0 ]; then
-            log "📋 ${window}: ${remaining} more tasks in queue"
-        fi
-        # Telegram 通知完成
-        local done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
-        [ "$remaining" -gt 0 ] && done_msg="${done_msg}\n📋 还剩 ${remaining} 个任务待处理"
-        send_telegram "$done_msg"
+        if [ -n "$queue_task_branch" ] && [[ "$queue_task_branch" == ap/* ]]; then
+            attempt_branch_auto_merge_if_ready \
+                "$window" "$safe" "$project_dir" "$state" \
+                "$current_branch" "$queue_task_branch" "$queue_task_base" "$msg" "$current_head" || true
+        else
+            # 普通任务：旧行为保持不变（检测到新 commit 即 done）。
+            local queue_done_output
+            queue_done_output=$("${SCRIPT_DIR}/task-queue.sh" done "$safe" "${current_head:0:7}" 2>/dev/null || true)
+            queue_source=$(printf '%s\n' "$queue_done_output" | sed -n 's/^SOURCE: //p' | head -n1 | tr -d '\r')
+            log "📋✅ ${window}: queue task completed (commit ${current_head:0:7})"
+            local remaining
+            remaining=$("${SCRIPT_DIR}/task-queue.sh" count "$safe" 2>/dev/null || echo 0)
+            remaining=$(normalize_int "$remaining")
+            if [ "$remaining" -gt 0 ]; then
+                log "📋 ${window}: ${remaining} more tasks in queue"
+            fi
+            local done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
+            [ "$remaining" -gt 0 ] && done_msg="${done_msg}\n📋 还剩 ${remaining} 个任务待处理"
+            send_telegram "$done_msg"
 
-        # Discord 通知完成
-        local discord_done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
-        [ "$remaining" -gt 0 ] && discord_done_msg="${discord_done_msg} | 还剩 ${remaining} 个任务"
-        [ -n "$queue_source" ] && discord_done_msg="${discord_done_msg} | source: ${queue_source}"
-        send_discord_by_window "$window" "$discord_done_msg"
+            local discord_done_msg="✅ ${window}: 队列任务完成 (${current_head:0:7}) — ${msg:0:80}"
+            [ "$remaining" -gt 0 ] && discord_done_msg="${discord_done_msg} | 还剩 ${remaining} 个任务"
+            [ -n "$queue_source" ] && discord_done_msg="${discord_done_msg} | source: ${queue_source}"
+            send_discord_by_window "$window" "$discord_done_msg"
+        fi
     fi
 
     # Layer 1 自动检查
@@ -1535,6 +1760,8 @@ trap 'log "🛑 Received SIGTERM, shutting down..."; exit 0' TERM INT
 
 assert_runtime_ready
 load_projects
+load_branch_isolation_config
+log "🌿 branch isolation: enabled=${BRANCH_ISOLATION_ENABLED}, auto_merge=${BRANCH_AUTO_MERGE_ENABLED}, require_auto_check=${BRANCH_REQUIRE_AUTO_CHECK}, require_tests=${BRANCH_REQUIRE_TESTS}, base=${BRANCH_BASE_BRANCH}"
 log "🚀 Watchdog v4 started (tick=${TICK}s, idle_threshold=${IDLE_THRESHOLD}s, idle_confirm=${IDLE_CONFIRM_PROBES}, inertia=${WORKING_INERTIA_SECONDS}s, projects=${#PROJECTS[@]}, pid=$$)"
 
 cycle=0
@@ -1555,7 +1782,7 @@ while true; do
         fi
 
         # Layer 1: 检测新 commit 并自动检查
-        check_new_commits "$window" "$safe" "$project_dir"
+        check_new_commits "$window" "$safe" "$project_dir" "$state"
 
         # 手动 tmux-send 任务追踪：检测完成与超时（不影响 queue 逻辑）
         check_tracked_manual_task "$window" "$safe" "$project_dir" "$state"

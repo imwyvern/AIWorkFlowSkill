@@ -72,6 +72,25 @@ discord_channels:
     tmux_window: "kpw-bot-js"
     project_dir: "/Users/wes/clawd/kpw-bot-js"
 
+# Branch 隔离模式（Phase 1）
+branch_isolation:
+  enabled: true
+  default_mode: auto
+  base_branch: main
+  naming:
+    prefix: ap
+  policy:
+    force_branch_types: [feature, refactor, test, review_fix]
+    allow_main_types: [ops, report]
+  auto_merge:
+    enabled: true
+    strategy: squash
+    require_auto_check: true
+    require_tests: false  # Phase 1 暂不生效，Test Agent 实现后启用
+  cleanup:
+    ttl_hours: 72
+    keep_failed_hours: 168
+
 # 高级模式: 使用 ~/.autopilot/projects/ 目录
 # 每个项目一个子目录，包含 tasks.yaml
 #
