@@ -91,6 +91,40 @@ branch_isolation:
     ttl_hours: 72
     keep_failed_hours: 168
 
+# Test Agent（Phase 1: Jest + review CLEAN 触发）
+test_agent:
+  enabled: true
+  mode: "shared"
+  trigger:
+    on_review_clean: true
+    on_commit_evaluate: true
+    nightly: "02:30"
+  queue:
+    max_tasks_per_round: 3
+    priority: "normal"
+  coverage:
+    changed_files_min: 80
+    global_no_regression: true
+    ratchet_weekly: 1
+    ratchet_cap: 90
+    critical_paths: ["src/core", "scripts"]
+    critical_min: 90
+  quality_gate:
+    min_assertions: 1
+    disallow_empty: true
+    require_coverage_delta: true
+    rerun_times: 2
+  frameworks:
+    jest:
+      test_cmd: "npm test -- --coverage --ci"
+      coverage_file: "coverage/coverage-summary.json"
+    junit:
+      test_cmd: "./gradlew test jacocoTestReport"
+      coverage_file: "build/reports/jacoco/test/jacocoTestReport.xml"
+    bats:
+      test_cmd: "bats test/"
+      coverage_file: null
+
 # 高级模式: 使用 ~/.autopilot/projects/ 目录
 # 每个项目一个子目录，包含 tasks.yaml
 #
