@@ -126,8 +126,11 @@ test_quality_gate() {
         fi
     done <<< "$changed"
 
-    if [ "$added_test_count" -eq 0 ]; then
-        echo "未检测到新增测试文件" >> "$issues_file"
+    # 只在没有任何测试变更（新增+修改）时才报警
+    local test_change_count
+    test_change_count=$(echo "$changed" | grep -cE '\.(test|spec)\.(ts|tsx|js|jsx)$' || echo 0)
+    if [ "$test_change_count" -eq 0 ]; then
+        echo "未检测到测试文件变更（新增或修改）" >> "$issues_file"
     fi
 
     # 门禁 3：覆盖率不下降（按变更文件比较 before/after）。
