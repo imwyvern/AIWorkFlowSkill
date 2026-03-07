@@ -6,7 +6,7 @@
 #       queue 优先级高于 prd-todo（watchdog handle_idle 优先级 2 vs 4）
 #
 # 用法:
-#   task-queue.sh add <project> <task> [priority] [--source discord:<channel_id>:<message_id>]
+#   task-queue.sh add <project> <task> [priority] [--source discord:<channel_id>:<message_id>] [--type <task_type>]
 #   task-queue.sh list <project>                     # 列出队列
 #   task-queue.sh next <project>                     # 获取下一个待办任务
 #   task-queue.sh start <project>                    # 标记第一个待办为进行中
@@ -26,6 +26,7 @@ fi
 QUEUE_DIR="$HOME/.autopilot/task-queue"
 LOCK_DIR="$HOME/.autopilot/locks"
 QUEUE_LOCK_STALE_SECONDS="${QUEUE_LOCK_STALE_SECONDS:-120}"
+BRANCH_MANAGER="${SCRIPT_DIR}/branch-manager.sh"
 mkdir -p "$QUEUE_DIR" "$LOCK_DIR"
 
 sanitize() {
@@ -113,6 +114,121 @@ extract_source_from_line() {
     printf '%s\n' "$source_part" | sed 's/[[:space:]]*$//'
 }
 
+extract_meta_from_line() {
+    local line="${1:-}" key="${2:-}"
+    [ -n "$line" ] || return 1
+    [ -n "$key" ] || return 1
+    printf '%s\n' "$line" \
+        | sed -n "s/^.* | ${key}: \\([^|]*\\).*$/\\1/p" \
+        | sed 's/[[:space:]]*$//' \
+        | head -n1
+}
+
+resolve_project_dir_by_safe() {
+    local project_safe="$1"
+    local project_dir=""
+    local config_yaml="$HOME/.autopilot/config.yaml"
+    local conf="$HOME/.autopilot/watchdog-projects.conf"
+
+    if declare -F autopilot_load_projects_entries >/dev/null 2>&1; then
+        local entry w d w_safe
+        while IFS= read -r entry || [ -n "$entry" ]; do
+            [ -n "$entry" ] || continue
+            w="${entry%%:*}"
+            d="${entry#*:}"
+            [ "$d" = "$entry" ] && continue
+            w_safe=$(sanitize "$w")
+            if [ "$w_safe" = "$project_safe" ]; then
+                project_dir="$d"
+                break
+            fi
+        done < <(autopilot_load_projects_entries "$config_yaml" "$conf" 2>/dev/null || true)
+    fi
+
+    if [ -z "$project_dir" ] && [ -f "$conf" ]; then
+        while IFS=: read -r w d _rest; do
+            local w_safe
+            w_safe=$(sanitize "$w")
+            if [ "$w_safe" = "$project_safe" ]; then
+                project_dir="$d"
+                break
+            fi
+        done < <(grep -v '^#' "$conf" | grep -v '^$')
+    fi
+
+    [ -n "$project_dir" ] && echo "$project_dir"
+}
+
+cleanup_branch_state_if_possible() {
+    local project_safe="$1"
+    [ -x "$BRANCH_MANAGER" ] || return 0
+    local project_dir
+    project_dir=$(resolve_project_dir_by_safe "$project_safe" 2>/dev/null || true)
+    [ -n "$project_dir" ] || return 0
+    "$BRANCH_MANAGER" cleanup "$project_dir" "$project_safe" >/dev/null 2>&1 || true
+}
+
+append_branch_meta_to_in_progress_if_needed() {
+    local project_safe="$1" file="$2"
+    [ -f "$file" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+
+    local branch_state_file status branch base_branch updated_at now_ts_val state_age project_dir
+    branch_state_file="$HOME/.autopilot/state/branches/${project_safe}.json"
+    [ -f "$branch_state_file" ] || return 0
+    jq -e . "$branch_state_file" >/dev/null 2>&1 || return 0
+
+    status=$(jq -r '.state // ""' "$branch_state_file" 2>/dev/null || echo "")
+    branch=$(jq -r '.active_branch // ""' "$branch_state_file" 2>/dev/null || echo "")
+    base_branch=$(jq -r '.base_branch // ""' "$branch_state_file" 2>/dev/null || echo "")
+    updated_at=$(jq -r '.updated_at // 0' "$branch_state_file" 2>/dev/null || echo 0)
+    updated_at=$(echo "$updated_at" | tr -dc '0-9')
+    updated_at=${updated_at:-0}
+
+    case "$status" in
+        created|in_progress|ready_merge) ;;
+        *) return 0 ;;
+    esac
+    [[ "$branch" == ap/* ]] || return 0
+
+    now_ts_val=$(date +%s)
+    state_age=$((now_ts_val - updated_at))
+    [ "$state_age" -ge 0 ] || state_age=0
+    [ "$state_age" -le 600 ] || return 0
+
+    project_dir=$(resolve_project_dir_by_safe "$project_safe" 2>/dev/null || true)
+    if [ -n "$project_dir" ] && command -v git >/dev/null 2>&1; then
+        git -C "$project_dir" show-ref --verify --quiet "refs/heads/${branch}" >/dev/null 2>&1 || return 0
+    fi
+
+    python3 - "$file" "$branch" "$base_branch" <<'PYEOF' >/dev/null 2>&1 || true
+import pathlib
+import sys
+
+queue_file = pathlib.Path(sys.argv[1])
+task_branch = sys.argv[2]
+base_branch = sys.argv[3]
+
+text = queue_file.read_text(encoding="utf-8")
+lines = text.splitlines(keepends=True)
+changed = False
+for idx, line in enumerate(lines):
+    if not line.startswith("- [→]"):
+        continue
+    updated = line.rstrip("\n")
+    if " | task_branch:" not in updated:
+        updated += f" | task_branch: {task_branch}"
+    if base_branch and " | base_branch:" not in updated:
+        updated += f" | base_branch: {base_branch}"
+    lines[idx] = updated + ("\n" if line.endswith("\n") else "")
+    changed = True
+    break
+
+if changed:
+    queue_file.write_text("".join(lines), encoding="utf-8")
+PYEOF
+}
+
 # 确保队列文件存在且有 header
 ensure_queue() {
     local file="$1"
@@ -129,6 +245,7 @@ _cmd_add_locked() {
     local task="${2:?}"
     local priority="${3:-normal}"
     local source="${4:-}"
+    local task_type="${5:-task}"
 
     local file
     file=$(queue_file "$project")
@@ -136,6 +253,7 @@ _cmd_add_locked() {
 
     local entry="- [ ] ${task} | added: $(now_iso)"
     [ -n "$source" ] && entry="${entry} | source: ${source}"
+    [ -n "$task_type" ] && entry="${entry} | type: ${task_type}"
 
     if [ "$priority" = "high" ]; then
         # 高优先级: 插入到第一个 [ ] 之前（python 处理，避免 sed UTF-8 问题）
@@ -179,6 +297,7 @@ cmd_add() {
 
     local priority="normal"
     local source=""
+    local task_type="task"
     while [ "$#" -gt 0 ]; do
         case "$1" in
             high|normal)
@@ -189,6 +308,15 @@ cmd_add() {
                 source="${1:-}"
                 if [ -z "$source" ]; then
                     echo "ERROR: --source 缺少参数" >&2
+                    return 1
+                fi
+                ;;
+            --type)
+                shift || true
+                task_type="${1:-}"
+                task_type=$(echo "$task_type" | tr -cd 'a-zA-Z0-9_-')
+                if [ -z "$task_type" ]; then
+                    echo "ERROR: --type 需为字母数字下划线/短横线" >&2
                     return 1
                 fi
                 ;;
@@ -205,7 +333,7 @@ cmd_add() {
         return 1
     fi
 
-    run_with_queue_lock "$project" _cmd_add_locked "$project" "$task" "$priority" "$source"
+    run_with_queue_lock "$project" _cmd_add_locked "$project" "$task" "$priority" "$source" "$task_type"
 }
 
 cmd_list() {
@@ -237,8 +365,10 @@ cmd_next() {
 _cmd_start_locked() {
     local project="${1:?}"
     local file
+    local safe
     file=$(queue_file "$project")
     [ -f "$file" ] || return 1
+    safe=$(sanitize "$project")
 
     # 把第一个 [ ] 改为 [→]，加 started 时间
     local has_todo
@@ -269,6 +399,7 @@ PYEOF
         # fallback: sed
         sed -i '' "0,/^\- \[ \]/s/^\- \[ \]/- [→]/" "$file"
     }
+    append_branch_meta_to_in_progress_if_needed "$safe" "$file"
     echo "OK: 任务已标记为进行中"
 }
 
@@ -315,6 +446,7 @@ queue_file.write_text("\n".join(lines), encoding="utf-8")
 PYEOF
         # 自动同步 prd-todo: 如果队列任务关键词匹配 prd-todo 中的未完成项，标记为 ✅
         sync_prd_todo "$project" "$file"
+        cleanup_branch_state_if_possible "$project"
 
         if [ -n "$source_info" ]; then
             echo "OK: 任务已完成 | source: ${source_info}"
@@ -424,6 +556,7 @@ PYEOF
         retry_entry="- [ ] ${task_desc} (retry) | added: $(now_iso)"
         [ -n "$source_info" ] && retry_entry="${retry_entry} | source: ${source_info}"
         echo "$retry_entry" >> "$file"
+        cleanup_branch_state_if_possible "$project"
         echo "OK: 任务已标记失败并重新入队"
     else
         return 1

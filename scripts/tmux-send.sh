@@ -22,9 +22,18 @@ SESSION="autopilot"
 TRACK_ENABLED="auto"
 TRACK_SOURCE=""
 TRACK_SOURCE_CHANNEL=""
+BRANCH_MODE="auto"
+TASK_TYPE="task"
+BASE_BRANCH=""
+TRACK_BRANCH=""
+TRACK_BASE_BRANCH=""
+BRANCH_MANAGER="${SCRIPT_DIR}/branch-manager.sh"
+BRANCH_ENABLED_CFG="true"
+BRANCH_DEFAULT_MODE="auto"
+FORCE_BRANCH_TYPES_CSV="feature,refactor,test,review_fix"
 
 usage() {
-    echo "用法: tmux-send.sh [--track|--no-track] [--source <source>] [--source-channel <channel_id>] <window> <message>" >&2
+    echo "用法: tmux-send.sh [--track|--no-track] [--source <source>] [--source-channel <channel_id>] [--branch-mode auto|on|off] [--task-type <type>] [--base-branch <name>] <window> <message>" >&2
 }
 
 resolve_track_enabled() {
@@ -39,6 +48,113 @@ resolve_track_enabled() {
         TRACK_ENABLED=false
     else
         TRACK_ENABLED=true
+    fi
+}
+
+trim_csv_item() {
+    echo "${1:-}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//; s/^'\''//; s/'\''$//'
+}
+
+load_branch_isolation_config() {
+    local config_file="${AUTOPILOT_CONFIG_FILE:-$HOME/.autopilot/config.yaml}"
+    [ -f "$config_file" ] || return 0
+
+    local enabled_val default_mode_val base_branch_val force_line
+    enabled_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*enabled:[[:space:]]*/ {
+            sub(/^[[:space:]]*enabled:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    default_mode_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*default_mode:[[:space:]]*/ {
+            sub(/^[[:space:]]*default_mode:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    base_branch_val=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*base_branch:[[:space:]]*/ {
+            sub(/^[[:space:]]*base_branch:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    force_line=$(awk '
+        /^[[:space:]]*branch_isolation:[[:space:]]*$/ {in_branch=1; next}
+        in_branch && /^[^[:space:]]/ {in_branch=0}
+        in_branch && /^[[:space:]]*policy:[[:space:]]*$/ {in_policy=1; next}
+        in_policy && /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/ && $0 !~ /^[[:space:]]*force_branch_types:[[:space:]]*$/ {next}
+        in_policy && /^[[:space:]]*force_branch_types:[[:space:]]*/ {
+            sub(/^[[:space:]]*force_branch_types:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+
+    enabled_val=$(trim_csv_item "$enabled_val")
+    default_mode_val=$(trim_csv_item "$default_mode_val")
+    base_branch_val=$(trim_csv_item "$base_branch_val")
+
+    if [ -n "$enabled_val" ]; then
+        enabled_val=$(echo "$enabled_val" | tr '[:upper:]' '[:lower:]')
+        case "$enabled_val" in
+            1|true|yes|on) BRANCH_ENABLED_CFG="true" ;;
+            *) BRANCH_ENABLED_CFG="false" ;;
+        esac
+    fi
+    [ -n "$default_mode_val" ] && BRANCH_DEFAULT_MODE="$(echo "$default_mode_val" | tr '[:upper:]' '[:lower:]')"
+    [ -z "$BASE_BRANCH" ] && [ -n "$base_branch_val" ] && BASE_BRANCH="$base_branch_val"
+
+    if [ -n "$force_line" ] && echo "$force_line" | grep -q '\['; then
+        force_line=$(echo "$force_line" | sed 's/.*\[\(.*\)\].*/\1/')
+        force_line=$(echo "$force_line" | tr -d ' ')
+        [ -n "$force_line" ] && FORCE_BRANCH_TYPES_CSV="$force_line"
+    fi
+}
+
+task_type_in_force_list() {
+    local target="$1"
+    local item
+    IFS=',' read -r -a __force_items <<< "$FORCE_BRANCH_TYPES_CSV"
+    for item in "${__force_items[@]}"; do
+        item=$(trim_csv_item "$item")
+        [ -n "$item" ] || continue
+        if [ "$item" = "$target" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+should_enable_branch_mode() {
+    local requested_mode="$1"
+    local task_type="$2"
+    local mode="$requested_mode"
+
+    if [ "$mode" = "on" ]; then
+        echo "true"
+        return 0
+    fi
+    if [ "$mode" = "off" ]; then
+        echo "false"
+        return 0
+    fi
+
+    # auto 模式遵循 config 默认策略，默认是“force 列表任务走 branch”。
+    if [ "$BRANCH_ENABLED_CFG" != "true" ]; then
+        echo "false"
+        return 0
+    fi
+
+    case "$BRANCH_DEFAULT_MODE" in
+        on) echo "true"; return 0 ;;
+        off) echo "false"; return 0 ;;
+    esac
+
+    if task_type_in_force_list "$task_type"; then
+        echo "true"
+    else
+        echo "false"
     fi
 }
 
@@ -62,6 +178,32 @@ while [ "$#" -gt 0 ]; do
             shift || true
             TRACK_SOURCE_CHANNEL="${1:-}"
             [ -n "$TRACK_SOURCE_CHANNEL" ] || { echo "ERROR: --source-channel 缺少参数" >&2; usage; exit 1; }
+            shift
+            ;;
+        --branch-mode)
+            shift || true
+            BRANCH_MODE="${1:-}"
+            case "$BRANCH_MODE" in
+                auto|on|off) ;;
+                *)
+                    echo "ERROR: --branch-mode 仅支持 auto|on|off" >&2
+                    usage
+                    exit 1
+                    ;;
+            esac
+            shift
+            ;;
+        --task-type)
+            shift || true
+            TASK_TYPE="${1:-}"
+            TASK_TYPE=$(echo "$TASK_TYPE" | tr -cd 'a-zA-Z0-9_-')
+            [ -n "$TASK_TYPE" ] || { echo "ERROR: --task-type 缺少有效值" >&2; usage; exit 1; }
+            shift
+            ;;
+        --base-branch)
+            shift || true
+            BASE_BRANCH="${1:-}"
+            [ -n "$BASE_BRANCH" ] || { echo "ERROR: --base-branch 缺少参数" >&2; usage; exit 1; }
             shift
             ;;
         --help|-h)
@@ -153,6 +295,8 @@ persist_tracked_task() {
     local tracked_tmp="${tracked_file}.tmp"
     local source="${TRACK_SOURCE}"
     local source_channel="${TRACK_SOURCE_CHANNEL}"
+    local task_branch="${TRACK_BRANCH}"
+    local task_base_branch="${TRACK_BASE_BRANCH:-$BASE_BRANCH}"
     local mapped_channel mapped_channel_id
     local head_before started_at
 
@@ -178,6 +322,9 @@ persist_tracked_task() {
             --arg source_channel "$source_channel" \
             --arg head_before "$head_before" \
             --arg window "$WINDOW" \
+            --arg task_type "$TASK_TYPE" \
+            --arg task_branch "$task_branch" \
+            --arg task_base_branch "$task_base_branch" \
             --argjson started_at "$started_at" \
             '{
                 task: $task,
@@ -185,6 +332,9 @@ persist_tracked_task() {
                 source_channel: $source_channel,
                 window: $window,
                 head_before: $head_before,
+                task_type: $task_type,
+                branch: $task_branch,
+                base_branch: $task_base_branch,
                 started_at: $started_at,
                 status: "in-progress"
             }' > "$tracked_tmp" \
@@ -254,6 +404,44 @@ fi
 if ! "$TMUX" list-windows -t "$SESSION" -F '#{window_name}' | grep -qx "$WINDOW"; then
     echo "ERROR: window '$WINDOW' 不存在" >&2
     exit 1
+fi
+
+load_branch_isolation_config
+if [ -z "$BASE_BRANCH" ]; then
+    BASE_BRANCH="main"
+fi
+
+ENABLE_BRANCH_MODE=$(should_enable_branch_mode "$BRANCH_MODE" "$TASK_TYPE")
+if [ "$ENABLE_BRANCH_MODE" = "true" ]; then
+    if [ ! -x "$BRANCH_MANAGER" ]; then
+        echo "ERROR: branch mode 已启用，但缺少脚本 ${BRANCH_MANAGER}" >&2
+        exit 6
+    fi
+    PROJECT_DIR=$(resolve_project_dir_for_window "$WINDOW" 2>/dev/null || true)
+    if [ -z "$PROJECT_DIR" ]; then
+        echo "ERROR: branch mode 已启用，但无法解析窗口 ${WINDOW} 的项目目录" >&2
+        exit 6
+    fi
+
+    BRANCH_JSON=$("$BRANCH_MANAGER" ensure "$PROJECT_DIR" "$SAFE_WINDOW" "$TASK_TYPE" "$BASE_BRANCH" 2>/dev/null || true)
+    if [ -z "$BRANCH_JSON" ]; then
+        echo "ERROR: branch-manager ensure 返回空结果" >&2
+        exit 6
+    fi
+    if command -v jq >/dev/null 2>&1; then
+        TRACK_BRANCH=$(echo "$BRANCH_JSON" | jq -r '.branch // ""' 2>/dev/null || echo "")
+        TRACK_BASE_BRANCH=$(echo "$BRANCH_JSON" | jq -r '.base // ""' 2>/dev/null || echo "")
+    else
+        TRACK_BRANCH=$(echo "$BRANCH_JSON" | sed -n 's/.*"branch"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+        TRACK_BASE_BRANCH=$(echo "$BRANCH_JSON" | sed -n 's/.*"base"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+    fi
+
+    if [ -z "$TRACK_BRANCH" ]; then
+        echo "ERROR: branch-manager ensure 未返回有效 branch: $BRANCH_JSON" >&2
+        exit 6
+    fi
+    [ -n "$TRACK_BASE_BRANCH" ] || TRACK_BASE_BRANCH="$BASE_BRANCH"
+    log "Branch 隔离已启用: ${TRACK_BRANCH} (base=${TRACK_BASE_BRANCH}, task_type=${TASK_TYPE})"
 fi
 
 # ---- 检测 codex 是否在运行（子进程树检查，非 pane_current_command）----
