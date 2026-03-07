@@ -122,6 +122,9 @@ BRANCH_AUTO_MERGE_ENABLED="true"
 BRANCH_REQUIRE_AUTO_CHECK="true"
 BRANCH_REQUIRE_TESTS="false"
 BRANCH_BASE_BRANCH="main"
+TEST_AGENT_SCRIPT="${SCRIPT_DIR}/test-agent.sh"
+TEST_AGENT_ENABLED="false"
+TEST_AGENT_TRIGGER_REVIEW_CLEAN="true"
 
 # ---- 工具函数 ----
 log() {
@@ -249,6 +252,41 @@ load_branch_isolation_config() {
     case "$require_auto_check_val" in true|1|yes|on) BRANCH_REQUIRE_AUTO_CHECK="true" ;; false|0|no|off) BRANCH_REQUIRE_AUTO_CHECK="false" ;; esac
     case "$require_tests_val" in true|1|yes|on) BRANCH_REQUIRE_TESTS="true" ;; false|0|no|off) BRANCH_REQUIRE_TESTS="false" ;; esac
     [ -n "$base_branch_val" ] && BRANCH_BASE_BRANCH="$base_branch_val"
+}
+
+load_test_agent_config() {
+    local config_file="$CONFIG_YAML_FILE"
+    [ -f "$config_file" ] || return 0
+
+    local enabled_val on_review_clean_val
+    enabled_val=$(awk '
+        /^[[:space:]]*test_agent:[[:space:]]*$/ {in_test=1; next}
+        in_test && /^[^[:space:]]/ {in_test=0}
+        in_test && /^[[:space:]]*enabled:[[:space:]]*/ {
+            sub(/^[[:space:]]*enabled:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+    on_review_clean_val=$(awk '
+        /^[[:space:]]*test_agent:[[:space:]]*$/ {in_test=1; next}
+        in_test && /^[^[:space:]]/ {in_test=0}
+        in_test && /^[[:space:]]*trigger:[[:space:]]*$/ {in_trigger=1; next}
+        in_trigger && in_test && /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/ && $0 !~ /^[[:space:]]*on_review_clean:[[:space:]]*/ {next}
+        in_trigger && /^[[:space:]]*on_review_clean:[[:space:]]*/ {
+            sub(/^[[:space:]]*on_review_clean:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
+
+    enabled_val=$(echo "${enabled_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
+    on_review_clean_val=$(echo "${on_review_clean_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
+
+    case "$enabled_val" in
+        true|1|yes|on) TEST_AGENT_ENABLED="true" ;;
+        false|0|no|off) TEST_AGENT_ENABLED="false" ;;
+    esac
+    case "$on_review_clean_val" in
+        true|1|yes|on) TEST_AGENT_TRIGGER_REVIEW_CLEAN="true" ;;
+        false|0|no|off) TEST_AGENT_TRIGGER_REVIEW_CLEAN="false" ;;
+    esac
 }
 
 send_tmux_message() {
@@ -531,6 +569,55 @@ check_tracked_manual_task() {
         mark_tracked_task_timeout_notified "$tracked_file" "$now_val"
         log "⚠️ ${window}: tracked task timeout (${elapsed_text}, source=${source:-unknown})"
     fi
+}
+
+maybe_trigger_test_agent_on_review_clean() {
+    local window="$1" safe="$2" project_dir="$3" state="$4"
+    [ "$TEST_AGENT_ENABLED" = "true" ] || return 0
+    [ "$TEST_AGENT_TRIGGER_REVIEW_CLEAN" = "true" ] || return 0
+    [ -x "$TEST_AGENT_SCRIPT" ] || return 0
+    [ "$state" = "$CODEX_STATE_IDLE" ] || [ "$state" = "$CODEX_STATE_IDLE_LOW_CONTEXT" ] || return 0
+
+    local review_file review_mtime stamp_file last_mtime
+    review_file="${STATE_DIR}/layer2-review-${safe}.txt"
+    [ -f "$review_file" ] || return 0
+    grep -qi "CLEAN" "$review_file" 2>/dev/null || return 0
+
+    review_mtime=$(file_mtime "$review_file")
+    review_mtime=$(normalize_int "$review_mtime")
+    [ "$review_mtime" -gt 0 ] || return 0
+
+    stamp_file="${STATE_DIR}/test-agent-review-clean-${safe}.mtime"
+    last_mtime=$(cat "$stamp_file" 2>/dev/null || echo 0)
+    last_mtime=$(normalize_int "$last_mtime")
+    [ "$review_mtime" -gt "$last_mtime" ] || return 0
+
+    local trigger_lock="${LOCK_DIR}/test-agent-trigger-${safe}.lock.d"
+    if [ -d "$trigger_lock" ]; then
+        local lock_age
+        lock_age=$(( $(now_ts) - $(file_mtime "$trigger_lock") ))
+        if [ "$lock_age" -gt 900 ]; then
+            rm -rf "$trigger_lock" 2>/dev/null || true
+        fi
+    fi
+    mkdir "$trigger_lock" 2>/dev/null || return 0
+
+    (
+        trap 'rm -rf "'"$trigger_lock"'"' EXIT
+        local out_file out_json
+        out_file="${HOME}/.autopilot/logs/test-agent-${safe}.log"
+        out_json=$("$TEST_AGENT_SCRIPT" enqueue "$project_dir" "$window" "review_clean" >> "$out_file" 2>&1 || true)
+
+        if [ -n "$out_json" ] && echo "$out_json" | jq -e . >/dev/null 2>&1; then
+            local enqueued
+            enqueued=$(echo "$out_json" | jq -r '.enqueued // 0' 2>/dev/null || echo 0)
+            enqueued=$(normalize_int "$enqueued")
+            echo "$review_mtime" > "${stamp_file}.tmp" && mv -f "${stamp_file}.tmp" "$stamp_file"
+            log "🧪 ${window}: test-agent enqueue triggered after review CLEAN (enqueued=${enqueued})"
+        else
+            log "⚠️ ${window}: test-agent enqueue failed after review CLEAN"
+        fi
+    ) &
 }
 
 start_nudge_ack_check() {
@@ -1761,7 +1848,9 @@ trap 'log "🛑 Received SIGTERM, shutting down..."; exit 0' TERM INT
 assert_runtime_ready
 load_projects
 load_branch_isolation_config
+load_test_agent_config
 log "🌿 branch isolation: enabled=${BRANCH_ISOLATION_ENABLED}, auto_merge=${BRANCH_AUTO_MERGE_ENABLED}, require_auto_check=${BRANCH_REQUIRE_AUTO_CHECK}, require_tests=${BRANCH_REQUIRE_TESTS}, base=${BRANCH_BASE_BRANCH}"
+log "🧪 test-agent: enabled=${TEST_AGENT_ENABLED}, trigger_review_clean=${TEST_AGENT_TRIGGER_REVIEW_CLEAN}"
 log "🚀 Watchdog v4 started (tick=${TICK}s, idle_threshold=${IDLE_THRESHOLD}s, idle_confirm=${IDLE_CONFIRM_PROBES}, inertia=${WORKING_INERTIA_SECONDS}s, projects=${#PROJECTS[@]}, pid=$$)"
 
 cycle=0
@@ -1786,6 +1875,9 @@ while true; do
 
         # 手动 tmux-send 任务追踪：检测完成与超时（不影响 queue 逻辑）
         check_tracked_manual_task "$window" "$safe" "$project_dir" "$state"
+
+        # review CLEAN 后触发 Test Agent 任务生成（异步，不阻塞主循环）
+        maybe_trigger_test_agent_on_review_clean "$window" "$safe" "$project_dir" "$state"
 
         # 检测 prd-todo.md 变化（新需求加入）→ 重置 nudge 计数，重新激活
         if detect_prd_todo_changes "$safe" "$project_dir"; then
