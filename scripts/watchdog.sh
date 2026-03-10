@@ -370,6 +370,35 @@ extract_queue_meta_from_line() {
         | head -n1
 }
 
+# 根据任务类型拼接队列任务前缀；兼容旧数据（空/type=task 均按 general 处理）。
+build_task_prompt_by_type() {
+    local task_type_raw="${1:-}"
+    local task_desc="${2:-}"
+    local task_type
+    task_type=$(printf '%s\n' "$task_type_raw" | tr '[:upper:]' '[:lower:]')
+
+    case "$task_type" in
+        ""|general|task)
+            printf '%s' "$task_desc"
+            ;;
+        bugfix|bug|fix)
+            printf '任务类型: bugfix\n要求: 先复现并定位根因，再做最小修复；补充回归测试并自测通过。\n任务: %s' "$task_desc"
+            ;;
+        feature|feat)
+            printf '任务类型: feature\n要求: 先给出最小可行实现方案（接口/数据/边界），再分步实现并补充测试。\n任务: %s' "$task_desc"
+            ;;
+        refactor)
+            printf '任务类型: refactor\n要求: 不改变外部行为；重构后必须通过现有测试，并补充必要回归测试。\n任务: %s' "$task_desc"
+            ;;
+        review|review_fix)
+            printf '任务类型: review\n要求: 优先修复高优先级问题（P1/P2），修改后说明验证方式并提交。\n任务: %s' "$task_desc"
+            ;;
+        *)
+            printf '任务类型: %s\n任务: %s' "$task_type" "$task_desc"
+            ;;
+    esac
+}
+
 send_telegram_alert() {
     local window="$1" text="$2"
     send_telegram "🚨 ${window}: ${text}"
@@ -1115,12 +1144,12 @@ handle_idle() {
         queue_task=$("${SCRIPT_DIR}/task-queue.sh" next "$safe" 2>/dev/null || true)
         if [ -n "$queue_task" ]; then
             local queue_task_type queue_pending_line queue_file
-            queue_task_type="task"
+            queue_task_type="general"
             queue_file="${HOME}/.autopilot/task-queue/${safe}.md"
             queue_pending_line=$(grep -m1 '^\- \[ \]' "$queue_file" 2>/dev/null || true)
             if [ -n "$queue_pending_line" ]; then
-                queue_task_type=$(extract_queue_meta_from_line "$queue_pending_line" "type" 2>/dev/null || echo "task")
-                [ -n "$queue_task_type" ] || queue_task_type="task"
+                queue_task_type=$(extract_queue_meta_from_line "$queue_pending_line" "type" 2>/dev/null || echo "general")
+                [ -n "$queue_task_type" ] || queue_task_type="general"
             fi
 
             if [ "$weekly_limit_exhausted" = "true" ]; then
@@ -1134,7 +1163,7 @@ handle_idle() {
                 sync_project_status "$project_dir" "claude_fallback" "window=${window}" "state=idle"
             else
                 # 正常 Codex 派发
-                nudge_msg="${queue_task:0:280}"
+                nudge_msg=$(build_task_prompt_by_type "$queue_task_type" "${queue_task:0:280}")
                 if send_tmux_message "$window" "$nudge_msg" "queue task" "$queue_task_type" "auto"; then
                     "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
                     set_cooldown "$key"
