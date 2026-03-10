@@ -7,6 +7,7 @@
 #
 # 用法:
 #   task-queue.sh add <project> <task> [priority] [--source discord:<channel_id>:<message_id>] [--type <task_type>]
+#       type 默认 general
 #   task-queue.sh list <project>                     # 列出队列
 #   task-queue.sh next <project>                     # 获取下一个待办任务
 #   task-queue.sh start <project>                    # 标记第一个待办为进行中
@@ -245,7 +246,7 @@ _cmd_add_locked() {
     local task="${2:?}"
     local priority="${3:-normal}"
     local source="${4:-}"
-    local task_type="${5:-task}"
+    local task_type="${5:-general}"
 
     local file
     file=$(queue_file "$project")
@@ -297,7 +298,7 @@ cmd_add() {
 
     local priority="normal"
     local source=""
-    local task_type="task"
+    local task_type="general"
     while [ "$#" -gt 0 ]; do
         case "$1" in
             high|normal)
@@ -539,10 +540,13 @@ _cmd_fail_locked() {
     if grep -q '^\- \[→\]' "$file"; then
         # 提取任务描述（在改标记之前）
         local task_desc
-        local in_progress_line source_info retry_entry
+        local in_progress_line source_info task_type retry_entry
         in_progress_line=$(grep -m1 '^\- \[→\]' "$file" || true)
         task_desc=$(printf '%s\n' "$in_progress_line" | sed 's/^- \[→\] //; s/ | added:.*$//')
         source_info=$(extract_source_from_line "$in_progress_line")
+        task_type=$(extract_meta_from_line "$in_progress_line" "type" 2>/dev/null || true)
+        task_type=$(printf '%s\n' "$task_type" | tr -cd 'a-zA-Z0-9_-')
+        [ -n "$task_type" ] || task_type="general"
         # 改为 [!] 标记失败（python 处理 UTF-8，避免 shell 插值注入）
         python3 - "$file" <<'PYEOF'
 import pathlib
@@ -555,6 +559,7 @@ queue_file.write_text(content, encoding="utf-8")
 PYEOF
         retry_entry="- [ ] ${task_desc} (retry) | added: $(now_iso)"
         [ -n "$source_info" ] && retry_entry="${retry_entry} | source: ${source_info}"
+        retry_entry="${retry_entry} | type: ${task_type}"
         echo "$retry_entry" >> "$file"
         cleanup_branch_state_if_possible "$project"
         echo "OK: 任务已标记失败并重新入队"
