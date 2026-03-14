@@ -125,6 +125,7 @@ BRANCH_BASE_BRANCH="main"
 TEST_AGENT_SCRIPT="${SCRIPT_DIR}/test-agent.sh"
 TEST_AGENT_ENABLED="false"
 TEST_AGENT_TRIGGER_REVIEW_CLEAN="true"
+TEST_AGENT_TRIGGER_ON_COMMIT_EVALUATE="true"
 
 # ---- 工具函数 ----
 log() {
@@ -258,7 +259,7 @@ load_test_agent_config() {
     local config_file="$CONFIG_YAML_FILE"
     [ -f "$config_file" ] || return 0
 
-    local enabled_val on_review_clean_val
+    local enabled_val on_review_clean_val on_commit_val
     enabled_val=$(awk '
         /^[[:space:]]*test_agent:[[:space:]]*$/ {in_test=1; next}
         in_test && /^[^[:space:]]/ {in_test=0}
@@ -275,9 +276,19 @@ load_test_agent_config() {
             sub(/^[[:space:]]*on_review_clean:[[:space:]]*/, "", $0); print; exit
         }
     ' "$config_file" 2>/dev/null || true)
+    on_commit_val=$(awk '
+        /^[[:space:]]*test_agent:[[:space:]]*$/ {in_test=1; next}
+        in_test && /^[^[:space:]]/ {in_test=0}
+        in_test && /^[[:space:]]*trigger:[[:space:]]*$/ {in_trigger=1; next}
+        in_trigger && in_test && /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/ && $0 !~ /^[[:space:]]*on_commit_evaluate:[[:space:]]*/ {next}
+        in_trigger && /^[[:space:]]*on_commit_evaluate:[[:space:]]*/ {
+            sub(/^[[:space:]]*on_commit_evaluate:[[:space:]]*/, "", $0); print; exit
+        }
+    ' "$config_file" 2>/dev/null || true)
 
     enabled_val=$(echo "${enabled_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
     on_review_clean_val=$(echo "${on_review_clean_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
+    on_commit_val=$(echo "${on_commit_val:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' "'\''')
 
     case "$enabled_val" in
         true|1|yes|on) TEST_AGENT_ENABLED="true" ;;
@@ -286,6 +297,10 @@ load_test_agent_config() {
     case "$on_review_clean_val" in
         true|1|yes|on) TEST_AGENT_TRIGGER_REVIEW_CLEAN="true" ;;
         false|0|no|off) TEST_AGENT_TRIGGER_REVIEW_CLEAN="false" ;;
+    esac
+    case "$on_commit_val" in
+        true|1|yes|on) TEST_AGENT_TRIGGER_ON_COMMIT_EVALUATE="true" ;;
+        false|0|no|off) TEST_AGENT_TRIGGER_ON_COMMIT_EVALUATE="false" ;;
     esac
 }
 
@@ -646,6 +661,43 @@ maybe_trigger_test_agent_on_review_clean() {
             log "🧪 ${window}: test-agent enqueue triggered after review CLEAN (enqueued=${enqueued})"
         else
             log "⚠️ ${window}: test-agent enqueue failed after review CLEAN"
+        fi
+    ) &
+}
+
+maybe_trigger_test_agent_on_commit() {
+    local window="$1" safe="$2" project_dir="$3" current_head="$4"
+    [ "$TEST_AGENT_ENABLED" = "true" ] || return 0
+    [ "$TEST_AGENT_TRIGGER_ON_COMMIT_EVALUATE" = "true" ] || return 0
+    [ -x "$TEST_AGENT_SCRIPT" ] || return 0
+    [ -n "$current_head" ] || return 0
+
+    local stamp_file last_head trigger_lock
+    stamp_file="${STATE_DIR}/test-agent-commit-${safe}.head"
+    last_head=$(cat "$stamp_file" 2>/dev/null || echo "")
+    [ "$current_head" != "$last_head" ] || return 0
+
+    trigger_lock="${LOCK_DIR}/test-agent-commit-${safe}.lock.d"
+    if [ -d "$trigger_lock" ]; then
+        local lock_age
+        lock_age=$(( $(now_ts) - $(file_mtime "$trigger_lock") ))
+        if [ "$lock_age" -gt 900 ]; then
+            rm -rf "$trigger_lock" 2>/dev/null || true
+        fi
+    fi
+    mkdir "$trigger_lock" 2>/dev/null || return 0
+
+    (
+        trap 'rm -rf "'"$trigger_lock"'"' EXIT
+        local out_file out_json
+        out_file="${HOME}/.autopilot/logs/test-agent-${safe}.log"
+        out_json=$("$TEST_AGENT_SCRIPT" evaluate "$project_dir" "$window" 2>>"$out_file" || true)
+
+        if [ -n "$out_json" ] && echo "$out_json" | jq -e . >/dev/null 2>&1; then
+            echo "$current_head" > "${stamp_file}.tmp" && mv -f "${stamp_file}.tmp" "$stamp_file"
+            log "🧪 ${window}: test-agent evaluate triggered after commit (${current_head:0:7})"
+        else
+            log "⚠️ ${window}: test-agent evaluate failed after commit (${current_head:0:7})"
         fi
     ) &
 }
@@ -1558,6 +1610,7 @@ check_new_commits() {
 
     # Layer 1 自动检查
     run_auto_checks "$window" "$safe" "$project_dir"
+    maybe_trigger_test_agent_on_commit "$window" "$safe" "$project_dir" "$current_head"
     # PRD 引擎：按本次 commit 变更文件自动匹配并执行 checker
     run_prd_checks_for_commit "$window" "$safe" "$project_dir" "$last_head" "$current_head"
 
@@ -1880,7 +1933,7 @@ load_projects
 load_branch_isolation_config
 load_test_agent_config
 log "🌿 branch isolation: enabled=${BRANCH_ISOLATION_ENABLED}, auto_merge=${BRANCH_AUTO_MERGE_ENABLED}, require_auto_check=${BRANCH_REQUIRE_AUTO_CHECK}, require_tests=${BRANCH_REQUIRE_TESTS}, base=${BRANCH_BASE_BRANCH}"
-log "🧪 test-agent: enabled=${TEST_AGENT_ENABLED}, trigger_review_clean=${TEST_AGENT_TRIGGER_REVIEW_CLEAN}"
+log "🧪 test-agent: enabled=${TEST_AGENT_ENABLED}, trigger_review_clean=${TEST_AGENT_TRIGGER_REVIEW_CLEAN}, trigger_on_commit=${TEST_AGENT_TRIGGER_ON_COMMIT_EVALUATE}"
 log "🚀 Watchdog v4 started (tick=${TICK}s, idle_threshold=${IDLE_THRESHOLD}s, idle_confirm=${IDLE_CONFIRM_PROBES}, inertia=${WORKING_INERTIA_SECONDS}s, projects=${#PROJECTS[@]}, pid=$$)"
 
 cycle=0
