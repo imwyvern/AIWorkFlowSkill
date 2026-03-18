@@ -33,9 +33,20 @@ while IFS= read -r line; do
     # 检查是否需要审计
     audit_ts_file="${COMMIT_COUNT_DIR}/${safe}-last-audit-ts"
     audit_count_file="${COMMIT_COUNT_DIR}/${safe}-since-audit"
-    
+    legacy_review_ts_file="${COMMIT_COUNT_DIR}/${safe}-last-review-ts"
+    legacy_review_count_file="${COMMIT_COUNT_DIR}/${safe}-since-review"
+
     last_audit_ts=$(cat "$audit_ts_file" 2>/dev/null || echo 0)
-    since_audit=$(cat "$audit_count_file" 2>/dev/null || echo 0)
+    if [ "$last_audit_ts" -eq 0 ]; then
+        last_audit_ts=$(cat "$legacy_review_ts_file" 2>/dev/null || echo 0)
+    fi
+
+    if [ -f "$audit_count_file" ]; then
+        since_audit=$(cat "$audit_count_file" 2>/dev/null || echo 0)
+    else
+        since_audit=$(cat "$legacy_review_count_file" 2>/dev/null || echo 0)
+    fi
+
     time_since=$(($(now_ts) - last_audit_ts))
     
     should_audit=false
@@ -52,10 +63,10 @@ while IFS= read -r line; do
     # 写触发标记，由 cron（OpenClaw 子 agent）来执行实际验收
     echo "${project_dir}" > "${STATE_DIR}/prd-audit-trigger-${safe}"
     
-    # 更新时间戳和计数
+    # 更新时间戳和计数（单独维护 audit 口径，不影响 review 计数）
     now_ts > "$audit_ts_file"
     echo 0 > "$audit_count_file"
     
     log "📋 ${window}: PRD audit trigger written"
     
-done < "$PROJECTS_CONF"
+ done < "$PROJECTS_CONF"
