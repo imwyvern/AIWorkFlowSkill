@@ -1,6 +1,17 @@
-# AIWorkFlow — AI 开发全流程自动化系统
+<div align="center">
+
+# AIWorkFlow
+
+**AI 开发全流程自动化系统**
+**6 个 Skill · Autopilot 引擎 · 智能调度**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Shell](https://img.shields.io/badge/Shell-Bash-blue.svg)](scripts/)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
 
 [English](README.md) · 中文
+
+</div>
 
 > 一套面向 AI 创业团队的完整开发工具链：**6 个开发流程 Skill** + **Codex Autopilot 多项目自动化引擎** + **OpenClaw 智能调度层**
 
