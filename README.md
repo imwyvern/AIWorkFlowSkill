@@ -1,188 +1,192 @@
-# AIWorkFlow — AI 开发全流程自动化系统
+# AIWorkFlow — Full-Cycle AI Development Automation System
 
-> 一套面向 AI 创业团队的完整开发工具链：**6 个开发流程 Skill** + **Codex Autopilot 多项目自动化引擎** + **OpenClaw 智能调度层**
+English · [中文](README_zh.md)
 
----
-
-## 🏗 系统组成
-
-本项目包含三大模块：
-
-### 1. 开发流程 Skill 体系 (v1.5.0)
-
-覆盖从需求调研到上线的完整开发周期，可集成到 Gemini / Codex / Claude 等 AI 编码助手中。
-
-### 2. Codex Autopilot 引擎
-
-多项目并行的 Codex CLI 自动化监控与任务编排系统，通过 tmux + launchd 实现 7×24 无人值守开发。
-
-### 3. OpenClaw 智能调度层
-
-通过 [OpenClaw](https://github.com/openclaw/openclaw) 提供上层智能调度能力，包括 cron 定时任务、Claude sub-agent 代码审查、Telegram 消息通道、以及跨 AI 引擎的协同编排。
+> A complete development toolchain for AI startup teams: **6 Development Workflow Skills** + **Codex Autopilot Multi-Project Automation Engine** + **OpenClaw Intelligent Orchestration Layer**
 
 ---
 
-## 📋 开发流程 Skill
+## 🏗 System Architecture
+
+This project consists of three major modules:
+
+### 1. Development Workflow Skill System (v1.5.0)
+
+Covers the entire development lifecycle from requirement research to release, integrable with AI coding assistants like Gemini / Codex / Claude.
+
+### 2. Codex Autopilot Engine
+
+A multi-project parallel Codex CLI automation monitoring and task orchestration system, achieving 24/7 unattended development via tmux + launchd.
+
+### 3. OpenClaw Intelligent Orchestration Layer
+
+Provides higher-level intelligent orchestration capabilities through [OpenClaw](https://github.com/openclaw/openclaw), including cron scheduled tasks, Claude sub-agent code review, Telegram messaging channel, and cross-AI-engine collaborative orchestration.
+
+---
+
+## 📋 Development Workflow Skills
 
 ```
-需求调研 → 文档撰写 → 文档评审 → 开发实现 ←→ 测试设计 → 代码评审 → 发布
-   │          │          │          │              │          │
-   ▼          ▼          ▼          ▼              ▼          ▼
-requirement  doc-       doc-     development    testing    code-
--discovery   writing    review   + Bug修复                 review
+Requirement   → Doc        → Doc       → Development ←→ Test      → Code     → Release
+Research        Writing      Review       + Bug Fix       Design     Review
+   │              │            │            │               │          │
+   ▼              ▼            ▼            ▼               ▼          ▼
+requirement    doc-         doc-        development      testing    code-
+-discovery     writing      review      + Bug Fix                   review
 ```
 
-| Skill | 用途 | 触发示例 |
-|-------|------|---------|
-| **requirement-discovery** | 需求调研、RICE 评分、AI 可行性评估 | "帮我调研这个需求" |
-| **doc-writing** | 撰写 PRD、技术方案、API 设计、任务清单 | "帮我写需求文档" |
-| **doc-review** | 评审需求文档，发现遗漏和风险 | "评审这个 PRD" |
-| **development** | 开发实现、Bug 修复（5 Whys 根因分析）、进度追踪 | "帮我实现这个功能" |
-| **testing** | 测试策略、用例设计、覆盖率分析 | "帮我设计测试用例" |
-| **code-review** | 三层防御代码评审（自动检查 → 增量审查 → 全量审计） | "review 这个代码" |
+| Skill | Purpose | Trigger Example |
+|-------|---------|-----------------|
+| **requirement-discovery** | Requirement research, RICE scoring, AI feasibility assessment | "Research this requirement" |
+| **doc-writing** | Write PRDs, technical specs, API designs, task checklists | "Write a requirements doc" |
+| **doc-review** | Review requirement docs, identify gaps and risks | "Review this PRD" |
+| **development** | Implementation, bug fixes (5 Whys root cause analysis), progress tracking | "Implement this feature" |
+| **testing** | Test strategy, test case design, coverage analysis | "Design test cases for this" |
+| **code-review** | Three-layer defense code review (automated checks → incremental review → full audit) | "Review this code" |
 
-### 使用方式
+### Usage
 
-将 Skill 目录链接到你的 AI 助手：
+Link skill directories to your AI assistant:
 
 ```bash
 # Gemini
 ln -sf /path/to/AIWorkFlowSkill/development ~/.gemini/skills/development
 
-# Codex (AGENTS.md 中引用)
-# Claude (Skills 目录)
+# Codex (reference in AGENTS.md)
+# Claude (Skills directory)
 ```
 
-### 核心理念
+### Core Principles
 
-- **创业友好** — MoSCoW 快速确定 MVP，允许合理技术债（必须记录）
-- **AI 原生** — 每个 Skill 包含 AI 专项检查、Prompt 规范、Token 成本控制
-- **SOLID 驱动** — 开发和 Review 严格遵循 SOLID 原则
-- **文档闭环** — Bug 修复追溯文档，发现问题及时反馈
+- **Startup-Friendly** — MoSCoW for rapid MVP prioritization; reasonable tech debt allowed (must be documented)
+- **AI-Native** — Each skill includes AI-specific checks, prompt standards, and token cost controls
+- **SOLID-Driven** — Development and review strictly follow SOLID principles
+- **Doc-Closed-Loop** — Bug fixes trace back to docs; issues feed back promptly
 
 ---
 
-## 🤖 Codex Autopilot 引擎
+## 🤖 Codex Autopilot Engine
 
-### 架构
+### Architecture
 
 ```
                     ┌─────────────────────────────────────┐
-                    │         Codex Autopilot 引擎         │
+                    │        Codex Autopilot Engine         │
                     └─────────────────────────────────────┘
 
-  触发层              检测层              决策层              执行层
+  Trigger Layer       Detection Layer     Decision Layer      Execution Layer
 ┌──────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
 │ launchd  │───→│codex-status  │───→│ watchdog.sh  │───→│ tmux-send.sh │
-│  (10s)   │    │   .sh        │    │  (1200行)    │    │ (三层发送)    │
-└──────────┘    │ JSON状态检测  │    │ 状态机决策    │    └──────────────┘
-┌──────────┐    │working/idle/ │    │指数退避/锁/  │    ┌──────────────┐
-│  cron    │───→│permission/   │    │compact恢复   │───→│ task-queue.sh│
-│ (10min)  │    │shell/absent  │    └──────────────┘    │ (任务队列)    │
-└──────────┘    └──────────────┘           │            └──────────────┘
+│  (10s)   │    │   .sh        │    │  (~1700 LOC) │    │ (3-layer send)│
+└──────────┘    │ JSON status  │    │ State machine│    └──────────────┘
+┌──────────┐    │working/idle/ │    │ Exp backoff/ │    ┌──────────────┐
+│  cron    │───→│permission/   │    │ lock/compact │───→│ task-queue.sh│
+│ (10min)  │    │shell/absent  │    │ recovery     │    │ (task queue)  │
+└──────────┘    └──────────────┘    └──────────────┘    └──────────────┘
                                            │
-                 监控层                     ▼             审查层
+                 Monitoring Layer          ▼             Review Layer
             ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
             │monitor-all.sh│    │  Telegram     │    │consume-review│
-            │ + token统计   │───→│  通知/报告    │    │-trigger.sh   │
-            └──────────────┘    └──────────────┘    └──────────────┘
+            │ + token stats │───→│  Alerts/      │    │-trigger.sh   │
+            └──────────────┘    │  Reports      │    └──────────────┘
+                                └──────────────┘
 ```
 
-### OpenClaw 调度层
+### OpenClaw Orchestration Layer
 
-Autopilot 引擎与 [OpenClaw](https://github.com/openclaw/openclaw) 深度集成，形成三层协同：
+The Autopilot engine deeply integrates with [OpenClaw](https://github.com/openclaw/openclaw), forming a three-tier collaboration:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    OpenClaw Gateway                      │
 │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌────────┐ │
 │  │  Cron    │  │  Claude   │  │ Telegram  │  │ Task   │ │
-│  │  定时任务 │  │ Sub-agent │  │  通知通道  │  │ Queue  │ │
+│  │ Schedule │  │ Sub-agent │  │  Channel  │  │ Queue  │ │
 │  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └───┬────┘ │
 └───────┼──────────────┼──────────────┼────────────┼──────┘
         │              │              │            │
         ▼              ▼              ▼            ▼
-   monitor-all.sh  Code Review   告警/报告    用户提交任务
-   (10min 报告)    (双路审查)    (状态推送)   (Codex 空闲时派发)
+   monitor-all.sh  Code Review   Alerts/Reports  User-submitted tasks
+   (10min reports) (dual-path)   (status push)   (dispatched when idle)
 ```
 
-**OpenClaw 提供的关键能力：**
+**Key Capabilities Provided by OpenClaw:**
 
-| 能力 | 说明 |
-|------|------|
-| **Cron 定时任务** | 10 分钟监控报告、每日工作总结、PRD 自动验收、竞品监控 |
-| **Claude Sub-agent** | 独立 Claude 实例执行代码审查，与 Codex 形成**双路交叉审查** |
-| **Telegram 通道** | 实时状态推送、告警通知、任务接收（用户发 Telegram → Claude 写入队列 → Codex 执行） |
-| **跨引擎协同** | Claude（审查/分析）+ Codex（编码/修复）各司其职，通过触发文件协调 |
-| **对话式管理** | 通过 Telegram 与 Claude 对话，即时查询项目状态、派发任务、触发审查 |
+| Capability | Description |
+|------------|-------------|
+| **Cron Scheduling** | 10-min monitoring reports, daily work summaries, automated PRD verification, competitor monitoring |
+| **Claude Sub-agent** | Independent Claude instance for code review, forming **dual-path cross-review** with Codex |
+| **Telegram Channel** | Real-time status push, alert notifications, task intake (user sends Telegram → Claude writes to queue → Codex executes) |
+| **Cross-Engine Collaboration** | Claude (review/analysis) + Codex (coding/fixing), each with clear responsibilities, coordinated via trigger files |
+| **Conversational Management** | Chat with Claude via Telegram to query project status, dispatch tasks, or trigger reviews on demand |
 
-**典型协同流程：**
+**Typical Collaboration Flow:**
 
 ```
-用户 (Telegram) → "ReplyHer 有个白屏 bug"
+User (Telegram) → "ReplyHer has a white-screen bug"
        ↓
-Claude (OpenClaw) → 写入 task-queue → 等待 Codex idle
+Claude (OpenClaw) → writes to task-queue → waits for Codex idle
        ↓
-Watchdog 检测 idle → 从队列取出任务 → tmux send-keys 发给 Codex
+Watchdog detects idle → dequeues task → tmux send-keys to Codex
        ↓
-Codex 修复 → commit → watchdog 检测 commit 数达标
+Codex fixes → commit → watchdog detects commit count threshold met
        ↓
-触发 Claude sub-agent 代码审查 → 发现问题 → 再派给 Codex 修
+Triggers Claude sub-agent code review → finds issues → dispatches back to Codex
        ↓
-Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
+Review CLEAN → Telegram notifies user "✅ White-screen bug fixed"
 ```
 
-### 核心脚本
+### Core Scripts
 
-| 脚本 | 行数 | 功能 |
-|------|------|------|
-| `scripts/watchdog.sh` | ~1700 | 主守护进程 — 状态检测、智能 nudge、权限处理、compact 恢复、任务队列调度、任务追踪通知 |
-| `scripts/codex-status.sh` | ~200 | Codex TUI 状态检测（BFS 进程树），输出 JSON (working/idle/permission/shell/absent) |
-| `scripts/tmux-send.sh` | ~480 | 三层消息发送 + 任务追踪（`--track` 自动记录任务来源，watchdog 检测完成后通知） |
-| `scripts/monitor-all.sh` | ~450 | 10 分钟全局监控 + Telegram 报告（commit、context、lifecycle） |
-| `scripts/task-queue.sh` | ~350 | 任务队列 CRUD — 支持优先级、并发锁、超时回收、来源追踪 |
-| `scripts/consume-review-trigger.sh` | ~450 | Layer 2 代码审查消费者（触发文件驱动，输出完整性检查） |
-| `scripts/discord-notify.sh` | ~180 | Discord 通知 — 按项目频道映射推送（config.yaml 驱动） |
-| `scripts/autopilot-lib.sh` | ~350 | 共享函数库 — 项目加载、Discord 映射、文件工具 |
-| `scripts/autopilot-constants.sh` | ~50 | 状态常量定义（版本、状态字符串） |
-| `scripts/prd_verify_engine.py` | ~500 | PRD 验证引擎 — checker 插件系统，"proof of done" |
-| `scripts/codex-token-daily.py` | ~380 | Token 用量统计（从 Codex JSONL 会话提取） |
+| Script | LOC | Function |
+|--------|-----|----------|
+| `scripts/watchdog.sh` | ~1700 | Main daemon — status detection, smart nudge, permission handling, compact recovery, task queue scheduling, task tracking & notifications |
+| `scripts/codex-status.sh` | ~200 | Codex TUI status detection (BFS process tree), outputs JSON (working/idle/permission/shell/absent) |
+| `scripts/tmux-send.sh` | ~480 | Three-layer message sending + task tracking (`--track` auto-records task source, watchdog notifies on completion) |
+| `scripts/monitor-all.sh` | ~450 | 10-min global monitoring + Telegram report (commits, context, lifecycle) |
+| `scripts/task-queue.sh` | ~350 | Task queue CRUD — supports priority, concurrency locks, timeout recovery, source tracking |
+| `scripts/consume-review-trigger.sh` | ~450 | Layer 2 code review consumer (trigger-file driven, output completeness checks) |
+| `scripts/discord-notify.sh` | ~180 | Discord notifications — project-to-channel mapping (config.yaml driven) |
+| `scripts/autopilot-lib.sh` | ~350 | Shared function library — project loading, Discord mapping, file utilities |
+| `scripts/autopilot-constants.sh` | ~50 | Status constant definitions (version, status strings) |
+| `scripts/prd_verify_engine.py` | ~500 | PRD verification engine — checker plugin system, "proof of done" |
+| `scripts/codex-token-daily.py` | ~380 | Token usage statistics (extracted from Codex JSONL sessions) |
 
-### 智能 Nudge 决策树（v0.5.0）
+### Smart Nudge Decision Tree (v0.5.0)
 
 ```
 Codex idle
 │
-├─ PRD 完成 + 无 pending issues？
-│   ├─ review 有问题？→ nudge #N/5（5 次退避上限，无 commit 则暂停）
-│   ├─ 队列有任务？→ 绕过冷却，消费队列
-│   └─ 真的没事 → 🛑 完全停止 nudge（不浪费 token）
+├─ PRD complete + no pending issues?
+│   ├─ Review has issues? → nudge #N/5 (5-attempt backoff cap, pause if no commits)
+│   ├─ Queue has tasks? → bypass cooldown, consume queue
+│   └─ Truly nothing to do → 🛑 stop nudging entirely (don't waste tokens)
 │
-├─ 优先级 1: compact 刚完成？→ 恢复 nudge（含上下文快照）
-├─ 优先级 2: 队列有任务？→ 消费队列，发任务给 Codex
-├─ 优先级 3: autocheck/PRD 有问题？→ nudge 修复
-├─ 兜底: 无任何待办 → 💤 跳过（不再用 smart nudge "找事做"）
-└─ dirty tree？→ 催提交（覆盖以上 nudge 内容）
+├─ Priority 1: compact just finished? → resume nudge (with context snapshot)
+├─ Priority 2: queue has tasks? → consume queue, send task to Codex
+├─ Priority 3: autocheck/PRD has issues? → nudge to fix
+├─ Fallback: nothing pending → 💤 skip (no more "find work" smart nudge)
+└─ Dirty tree? → prompt to commit (overrides above nudge content)
 ```
 
-**核心原则：有任务才 nudge，没任务就安静。**
+**Core Principle: Nudge only when there's work; stay quiet when there isn't.**
 
-### 任务追踪与完成通知
+### Task Tracking & Completion Notifications
 
-解决"说了'完成后通知你'但实际做不到"的问题：
+Solves the problem of saying "I'll notify you when done" but never actually delivering:
 
 ```
-用户安排任务 → tmux-send.sh（自动 --track）→ tracked-task.json 写入
-→ watchdog 每 10s 检查
-→ 新 commit + Codex idle = ✅ Discord 通知到来源频道
-→ 1 小时无进展 = ⚠️ "任务可能卡住" 通知
+User assigns task → tmux-send.sh (auto --track) → writes tracked-task.json
+→ watchdog checks every 10s
+→ new commit + Codex idle = ✅ Discord notification to source channel
+→ 1 hour without progress = ⚠️ "task may be stuck" notification
 ```
 
-- 外部调用 tmux-send.sh 默认启用追踪
-- watchdog 内部调用自动关闭追踪（`--no-track`）
-- 任务来源（Discord 频道）自动从 config.yaml 映射
+- External calls to tmux-send.sh enable tracking by default
+- Internal watchdog calls auto-disable tracking (`--no-track`)
+- Task source (Discord channel) auto-mapped from config.yaml
 
-### Discord ↔ Autopilot 路由
+### Discord ↔ Autopilot Routing
 
 ```yaml
 # config.yaml
@@ -193,133 +197,133 @@ discord_channels:
     project_dir: "/Users/wes/Shike"
 ```
 
-- 项目完成 commit → 自动推送到对应 Discord 频道
-- 手动任务完成 → 通知回到来源频道
-- 支持 `--by-window` 反查频道
+- Project commit → auto-push to corresponding Discord channel
+- Manual task completion → notification sent back to source channel
+- Supports `--by-window` reverse channel lookup
 
-### 防护机制
+### Safety Mechanisms
 
-| 机制 | 说明 |
-|------|------|
-| **智能 nudge** | 无任务不 nudge，review issues 5 次退避，避免空转浪费 token |
-| **指数退避** | nudge 间隔 300→600→1200→2400→4800→9600s，6 次后停止 + 告警 |
-| **3 次 idle 确认** | 避免 API 延迟导致误判 |
-| **90s 工作惯性** | 刚检测到 working 的 90s 内不 nudge |
-| **手动任务保护** | 人工发送的任务 300s 内不被 watchdog 覆盖 |
-| **任务追踪** | 手动任务自动追踪，完成/超时均通知用户 |
-| **队列并发锁** | mkdir 原子锁，防止并发读写损坏队列文件 |
-| **队列超时回收** | in-progress >3600s 自动 fail 重新入队 |
-| **Compact 上下文快照** | compact 前保存任务状态，compact 后精准恢复 |
-| **原子锁 (mkdir)** | macOS 无 flock，用 mkdir 实现带过期回收的原子锁 |
-| **运行时文件隔离** | status.json 等运行时文件 gitignore，避免 dirty repo 阻塞 Codex |
+| Mechanism | Description |
+|-----------|-------------|
+| **Smart Nudge** | No nudge without tasks; review issues capped at 5 attempts with backoff; prevents idle token waste |
+| **Exponential Backoff** | Nudge intervals: 300→600→1200→2400→4800→9600s; stops after 6 attempts + alert |
+| **3× Idle Confirmation** | Prevents false positives from API latency |
+| **90s Work Inertia** | No nudge within 90s of detecting "working" state |
+| **Manual Task Protection** | Human-sent tasks protected from watchdog override for 300s |
+| **Task Tracking** | Manual tasks auto-tracked; user notified on completion or timeout |
+| **Queue Concurrency Lock** | Atomic mkdir lock to prevent concurrent read/write corruption |
+| **Queue Timeout Recovery** | In-progress tasks >3600s auto-fail and re-queue |
+| **Compact Context Snapshot** | Saves task state before compact, enables precise recovery after |
+| **Atomic Lock (mkdir)** | macOS lacks flock; uses mkdir with expiry-based recovery |
+| **Runtime File Isolation** | status.json and runtime files gitignored to prevent dirty repo blocking Codex |
 
-### 快速开始
+### Quick Start
 
 ```bash
-# 1. 配置项目
+# 1. Configure projects
 cat > watchdog-projects.conf << EOF
-ProjectA:/path/to/project-a:默认 nudge 消息
-ProjectB:/path/to/project-b:默认 nudge 消息
+ProjectA:/path/to/project-a:Default nudge message
+ProjectB:/path/to/project-b:Default nudge message
 EOF
 
-# 2. 配置 Telegram (config.yaml)
+# 2. Configure Telegram (config.yaml)
 telegram:
   bot_token: "your-bot-token"
   chat_id: "your-chat-id"
 
-# 3. 创建 tmux session
+# 3. Create tmux session
 tmux new-session -s autopilot -n ProjectA
-# 在窗口中启动: codex --full-auto
+# Start in the window: codex --full-auto
 
-# 4. 启动 watchdog
+# 4. Start watchdog
 nohup bash scripts/watchdog.sh &
 
-# 5. (可选) 设置 cron 监控
-# 每 10 分钟运行 monitor-all.sh
+# 5. (Optional) Set up cron monitoring
+# Run monitor-all.sh every 10 minutes
 */10 * * * * bash ~/.autopilot/scripts/monitor-all.sh
 ```
 
-### 任务队列
+### Task Queue
 
-支持在 Codex 忙碌时提交任务，空闲时自动派发：
+Submit tasks while Codex is busy; they are automatically dispatched when idle:
 
 ```bash
-# 添加任务
-bash scripts/task-queue.sh add myproject "修复登录页白屏bug" high
+# Add a task
+bash scripts/task-queue.sh add myproject "Fix login page white-screen bug" high
 
-# 查看队列
+# View queue
 bash scripts/task-queue.sh list myproject
 
-# 全局概览
+# Global overview
 bash scripts/task-queue.sh summary
 ```
 
-Watchdog 在 Codex idle 时自动从队列中取出任务并发送。
+Watchdog automatically dequeues and dispatches tasks when Codex becomes idle.
 
 ---
 
-## 📁 项目结构
+## 📁 Project Structure
 
 ```
 AIWorkFlowSkill/
-├── README.md                    # 本文件
-├── CONVENTIONS.md               # 项目约定（Codex 必读）
-├── CONTRIBUTING.md              # 贡献指南
+├── README.md                    # This file
+├── CONVENTIONS.md               # Project conventions (required reading for Codex)
+├── CONTRIBUTING.md              # Contribution guide
 ├── LICENSE                      # MIT
 │
-├── requirement-discovery/       # Skill: 需求调研
+├── requirement-discovery/       # Skill: Requirement Research
 │   ├── SKILL.md
 │   └── references/
-├── doc-writing/                 # Skill: 文档撰写
+├── doc-writing/                 # Skill: Doc Writing
 │   ├── SKILL.md
 │   └── references/
-├── doc-review/                  # Skill: 文档评审
+├── doc-review/                  # Skill: Doc Review
 │   ├── SKILL.md
 │   └── references/
-├── development/                 # Skill: 开发实现
+├── development/                 # Skill: Development
 │   ├── SKILL.md
 │   ├── references/
-│   └── scripts/                 # 会话管理脚本
-├── testing/                     # Skill: 测试设计
+│   └── scripts/                 # Session management scripts
+├── testing/                     # Skill: Test Design
 │   ├── SKILL.md
 │   └── references/
-├── code-review/                 # Skill: 代码评审
+├── code-review/                 # Skill: Code Review
 │   ├── SKILL.md
 │   └── references/
 │
-├── scripts/                     # Autopilot 引擎
-│   ├── watchdog.sh              # 主守护进程
-│   ├── codex-status.sh          # 状态检测
-│   ├── tmux-send.sh             # 消息发送
-│   ├── monitor-all.sh           # 监控报告
-│   ├── task-queue.sh            # 任务队列
+├── scripts/                     # Autopilot Engine
+│   ├── watchdog.sh              # Main daemon
+│   ├── codex-status.sh          # Status detection
+│   ├── tmux-send.sh             # Message sending
+│   ├── monitor-all.sh           # Monitoring reports
+│   ├── task-queue.sh            # Task queue
 │   ├── consume-review-trigger.sh
-│   ├── prd_verify_engine.py     # PRD 验证
+│   ├── prd_verify_engine.py     # PRD verification
 │   └── ...
 │
-├── watchdog-projects.conf       # 项目配置
-├── config.yaml                  # Telegram 等配置
-├── prd-items.yaml               # PRD 验证定义
+├── watchdog-projects.conf       # Project configuration
+├── config.yaml                  # Telegram & other config
+├── prd-items.yaml               # PRD verification definitions
 │
 ├── lib/                         # Phase 1-3 Python (legacy)
-└── tests/                       # Phase 1-3 测试 (200 tests)
+└── tests/                       # Phase 1-3 tests (200 tests)
 ```
 
 ---
 
-## 版本历史
+## Version History
 
-| 版本 | 日期 | 更新 |
-|------|------|------|
-| **0.5.0** | 2026-03-03 | 智能 nudge（无任务不 nudge）、任务追踪通知、Discord 路由、队列并发锁/超时回收、review 退避、BFS 进程树检测 |
-| **0.4.0** | 2026-03-01 | ClawHub 发布、Discord→Autopilot 路由、安全修复 |
-| **2.0.0** | 2026-02-12 | Autopilot 引擎: watchdog v6、三层 tmux 发送、任务队列、compact 上下文快照、PRD 验证引擎 |
-| 1.5.0 | 2026-01-19 | 集成 guo-yu/skills 工具；新增危险命令阻止列表 |
-| 1.4.1 | 2026-01-18 | 新增 testing skill；会话持久化与恢复 |
-| 1.3.0 | 2026-01-17 | 文档管理规范；渐进式讨论快速确认 |
-| 1.2.0 | 2026-01-17 | development skill Bug 修复章节 |
-| 1.1.0 | 2025-01-17 | 新增 requirement-discovery skill |
-| 1.0.0 | 2025-01-17 | 初始版本: 4 个核心 Skill |
+| Version | Date | Changes |
+|---------|------|---------|
+| **0.5.0** | 2026-03-03 | Smart nudge (no nudge without tasks), task tracking notifications, Discord routing, queue concurrency lock/timeout recovery, review backoff, BFS process tree detection |
+| **0.4.0** | 2026-03-01 | ClawHub release, Discord→Autopilot routing, security fixes |
+| **2.0.0** | 2026-02-12 | Autopilot engine: watchdog v6, three-layer tmux sending, task queue, compact context snapshot, PRD verification engine |
+| 1.5.0 | 2026-01-19 | Integrated guo-yu/skills tools; added dangerous command blocklist |
+| 1.4.1 | 2026-01-18 | Added testing skill; session persistence & recovery |
+| 1.3.0 | 2026-01-17 | Doc management standards; progressive discussion quick confirmation |
+| 1.2.0 | 2026-01-17 | Development skill bug fix chapter |
+| 1.1.0 | 2025-01-17 | Added requirement-discovery skill |
+| 1.0.0 | 2025-01-17 | Initial release: 4 core skills |
 
 ---
 
