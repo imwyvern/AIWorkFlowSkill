@@ -7,9 +7,11 @@ Telegram Notifier
 
 import logging
 import re
-from typing import Optional
+from typing import List, Optional
 
 import requests
+
+from lib.feishu_notifier import create_feishu_notifier_from_config
 
 logger = logging.getLogger(__name__)
 
@@ -129,25 +131,47 @@ class TelegramNotifier:
         return self.send_with_parse_mode(text, None)
 
 
-def create_notifier_from_config(config: dict) -> Optional[TelegramNotifier]:
+class FanoutNotifier:
+    """将同一条消息扇出到多个通知渠道。"""
+
+    def __init__(self, notifiers: List[object]):
+        self.notifiers = notifiers
+
+    def notify(self, text: str) -> bool:
+        results = [n.notify(text) for n in self.notifiers]
+        return any(results) if results else False
+
+    def send_simple(self, text: str) -> bool:
+        results = [n.send_simple(text) for n in self.notifiers]
+        return any(results) if results else False
+
+
+def create_notifier_from_config(config: dict) -> Optional[object]:
     """
     从配置创建通知器
     
-    Args:
-        config: 配置字典，需要包含 telegram.bot_token 和 telegram.chat_id
-    
-    Returns:
-        TelegramNotifier 或 None（如果配置不完整）
+    支持 Telegram / Feishu 单通道或多通道路由。
     """
+    notifiers: List[object] = []
+
     telegram_config = config.get("telegram", {})
     bot_token = telegram_config.get("bot_token")
     chat_id = telegram_config.get("chat_id")
-    
-    if not bot_token or not chat_id:
-        logger.warning("Telegram 配置不完整，通知功能禁用")
+    if bot_token and chat_id:
+        notifiers.append(TelegramNotifier(bot_token, str(chat_id)))
+
+    feishu_notifier = create_feishu_notifier_from_config(config)
+    if feishu_notifier:
+        notifiers.append(feishu_notifier)
+
+    if not notifiers:
+        logger.warning("未配置 Telegram 或 Feishu，通知功能禁用")
         return None
-    
-    return TelegramNotifier(bot_token, str(chat_id))
+
+    if len(notifiers) == 1:
+        return notifiers[0]
+
+    return FanoutNotifier(notifiers)
 
 
 # 通知模板
