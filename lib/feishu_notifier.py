@@ -12,6 +12,7 @@ import base64
 import hashlib
 import hmac
 import logging
+import re
 import time
 from typing import Optional
 
@@ -53,15 +54,8 @@ class FeishuNotifier:
                 "content": {
                     "post": {
                         "zh_cn": {
-                            "title": self.title,
-                            "content": [
-                                [
-                                    {
-                                        "tag": "text",
-                                        "text": text,
-                                    }
-                                ]
-                            ],
+                            "title": self._derive_post_title(text),
+                            "content": self._build_post_content(text),
                         }
                     }
                 },
@@ -73,6 +67,45 @@ class FeishuNotifier:
                 "text": text,
             },
         }
+
+    def _build_post_content(self, text: str) -> list:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return [[{"tag": "text", "text": "(empty message)"}]]
+        return [[{"tag": "text", "text": line}] for line in lines]
+
+    def _derive_post_title(self, text: str) -> str:
+        project_name = self._extract_project_name(text)
+        prefix = self._detect_title_prefix(text)
+        if project_name:
+            return f"{prefix} · {project_name}"
+        return prefix
+
+    def _detect_title_prefix(self, text: str) -> str:
+        text = text.strip()
+        if text.startswith("📊"):
+            return "Autopilot Status"
+        if text.startswith("❌") or text.startswith("🚨"):
+            return "Autopilot Alert"
+        if text.startswith("✅") or text.startswith("🎉"):
+            return "Autopilot Complete"
+        if text.startswith("📤"):
+            return "Autopilot Dispatch"
+        if text.startswith("⏸"):
+            return "Autopilot Review Needed"
+        return self.title
+
+    def _extract_project_name(self, text: str) -> Optional[str]:
+        patterns = [
+            r"Autopilot[^\n|]*\|\s*([^\n]+)",
+            r"项目\s+([^:\n]+)",
+            r"^[✅❌📊📤🎉⏸🚨]+\s*([^:\n]+):",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1).strip()
+        return None
 
     def _generate_sign(self, timestamp: str) -> str:
         string_to_sign = f"{timestamp}\n{self.secret}".encode("utf-8")

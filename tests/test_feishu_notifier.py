@@ -38,10 +38,21 @@ class TestFeishuNotifier:
             message_format="post",
             title="Autopilot Status",
         )
-        payload = notifier._build_payload("build finished")
+        payload = notifier._build_payload("📊 Autopilot 状态 | demo\n当前任务: build finished")
         assert payload["msg_type"] == "post"
-        assert payload["content"]["post"]["zh_cn"]["title"] == "Autopilot Status"
-        assert payload["content"]["post"]["zh_cn"]["content"][0][0]["text"] == "build finished"
+        assert payload["content"]["post"]["zh_cn"]["title"] == "Autopilot Status · demo"
+        assert payload["content"]["post"]["zh_cn"]["content"][0][0]["text"] == "📊 Autopilot 状态 | demo"
+        assert payload["content"]["post"]["zh_cn"]["content"][1][0]["text"] == "当前任务: build finished"
+
+    def test_detect_complete_title(self):
+        notifier = FeishuNotifier("https://example.com/hook", message_format="post")
+        payload = notifier._build_payload("✅ 项目 demo: 任务 [A] 完成，开始 [B]")
+        assert payload["content"]["post"]["zh_cn"]["title"] == "Autopilot Complete · demo"
+
+    def test_detect_alert_title(self):
+        notifier = FeishuNotifier("https://example.com/hook", message_format="post")
+        payload = notifier._build_payload("❌ 项目 demo 检测到循环依赖: boom")
+        assert payload["content"]["post"]["zh_cn"]["title"] == "Autopilot Alert · demo 检测到循环依赖"
 
     def test_invalid_message_format_falls_back_to_text(self):
         notifier = FeishuNotifier("https://example.com/hook", message_format="weird")
