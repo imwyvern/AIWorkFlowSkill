@@ -25,7 +25,7 @@ A complete development toolchain for AI startup teams: **6 Development Workflow 
 |--------|-------------|
 | **Workflow Skills** (v1.5.0) | 6 skills covering the full dev cycle — requirement research → doc writing → review → development → testing → code review |
 | **Codex Autopilot** | Multi-project 24/7 Codex CLI automation via tmux + launchd — status detection, smart nudge, task queue, auto-recovery |
-| **OpenClaw Layer** | Cron scheduling, Claude sub-agent reviews, Telegram/Discord channels, cross-engine orchestration |
+| **OpenClaw Layer** | Cron scheduling, Claude sub-agent reviews, Telegram/Discord/Feishu channels, cross-engine orchestration |
 
 ## 📋 Development Workflow Skills
 
@@ -134,7 +134,11 @@ cat > watchdog-projects.conf << EOF
 ProjectA:/path/to/project-a:Default nudge message
 EOF
 
-# 2. Configure Telegram (config.yaml)
+# 2. Configure Telegram and/or Feishu bot (config.yaml)
+#    Feishu example:
+#    feishu:
+#      webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
+#      secret: "optional-bot-secret"
 # 3. Create tmux session + start Codex
 tmux new-session -s autopilot -n ProjectA
 codex --full-auto

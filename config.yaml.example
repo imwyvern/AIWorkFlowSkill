@@ -37,6 +37,14 @@ telegram:
   chat_id: "YOUR_TELEGRAM_CHAT_ID"
   status_interval: 1800      # 状态报告间隔 (秒)
 
+# Feishu / Lark 机器人通知（可选）
+# webhook_url 示例：
+#   https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx
+# 如果机器人开启了“签名校验”，再填写 secret
+feishu:
+  webhook_url: "YOUR_FEISHU_WEBHOOK_URL"
+  secret: "YOUR_FEISHU_BOT_SECRET"
+
 # 项目目录列表 (简单模式)
 # 添加你要自动驾驶的项目路径
 # 这些目录会被扫描，优先使用 ~/.autopilot/projects/{name}/tasks.yaml

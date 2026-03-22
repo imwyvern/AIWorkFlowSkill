@@ -8,7 +8,7 @@ description: |
 
 # Codex Autopilot
 
-Automated multi-project Codex CLI orchestration via tmux + launchd on macOS.
+Automated multi-project Codex CLI orchestration via tmux + launchd on macOS, with Telegram / Discord / Feishu notification support.
 
 ## Overview
 
@@ -156,6 +156,13 @@ telegram:
   bot_token: "YOUR_BOT_TOKEN"
   chat_id: "YOUR_CHAT_ID"
   status_interval: 1800
+```
+
+### Feishu / Lark Notifications
+```yaml
+feishu:
+  webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
+  secret: "OPTIONAL_BOT_SECRET"
 ```
 
 ## Usage

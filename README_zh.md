@@ -156,6 +156,7 @@ Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
 | `scripts/task-queue.sh` | ~350 | 任务队列 CRUD — 支持优先级、并发锁、超时回收、来源追踪 |
 | `scripts/consume-review-trigger.sh` | ~450 | Layer 2 代码审查消费者（触发文件驱动，输出完整性检查） |
 | `scripts/discord-notify.sh` | ~180 | Discord 通知 — 按项目频道映射推送（config.yaml 驱动） |
+| `lib/feishu_notifier.py` | ~70 | 飞书机器人通知（支持 webhook + 可选签名） |
 | `scripts/autopilot-lib.sh` | ~350 | 共享函数库 — 项目加载、Discord 映射、文件工具 |
 | `scripts/autopilot-constants.sh` | ~50 | 状态常量定义（版本、状态字符串） |
 | `scripts/prd_verify_engine.py` | ~500 | PRD 验证引擎 — checker 插件系统，"proof of done" |
@@ -235,10 +236,14 @@ ProjectA:/path/to/project-a:默认 nudge 消息
 ProjectB:/path/to/project-b:默认 nudge 消息
 EOF
 
-# 2. 配置 Telegram (config.yaml)
+# 2. 配置 Telegram 和/或飞书机器人 (config.yaml)
 telegram:
   bot_token: "your-bot-token"
   chat_id: "your-chat-id"
+
+feishu:
+  webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
+  secret: "optional-bot-secret"
 
 # 3. 创建 tmux session
 tmux new-session -s autopilot -n ProjectA

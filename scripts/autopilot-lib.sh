@@ -655,7 +655,56 @@ load_telegram_config() {
     LIB_TG_CHAT=$(grep -E '^[[:space:]]*chat_id[[:space:]]*:' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
 }
 
-# Send a Telegram message (background, non-blocking)
+# Load Feishu config from ~/.autopilot/config.yaml
+# Sets: LIB_FEISHU_WEBHOOK, LIB_FEISHU_SECRET
+load_feishu_config() {
+    local config_file="${HOME}/.autopilot/config.yaml"
+    LIB_FEISHU_WEBHOOK=$(grep -E '^[[:space:]]*webhook_url[[:space:]]*:' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+    LIB_FEISHU_SECRET=$(grep -E '^[[:space:]]*secret[[:space:]]*:' "$config_file" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)
+}
+
+# Send a Feishu bot message (background, non-blocking)
+# Usage: send_feishu "message text"
+send_feishu() {
+    local msg="${1:-}"
+    [ -n "$msg" ] || return 0
+    if [ -z "${LIB_FEISHU_WEBHOOK:-}" ]; then
+        load_feishu_config
+    fi
+    if [ -n "${LIB_FEISHU_WEBHOOK:-}" ]; then
+        (
+            local payload
+            if [ -n "${LIB_FEISHU_SECRET:-}" ]; then
+                local timestamp sign
+                timestamp=$(date +%s)
+                sign=$(python3 - "$timestamp" "$LIB_FEISHU_SECRET" <<'PY'
+import base64, hashlib, hmac, sys
+
+timestamp = sys.argv[1]
+secret = sys.argv[2]
+key = f"{timestamp}\n{secret}".encode("utf-8")
+sign = base64.b64encode(hmac.new(key, msg=b"", digestmod=hashlib.sha256).digest()).decode("utf-8")
+print(sign)
+PY
+)
+                payload=$(jq -n \
+                    --arg text "$msg" \
+                    --arg timestamp "$timestamp" \
+                    --arg sign "$sign" \
+                    '{timestamp: $timestamp, sign: $sign, msg_type: "text", content: {text: $text}}')
+            else
+                payload=$(jq -n --arg text "$msg" '{msg_type: "text", content: {text: $text}}')
+            fi
+
+            curl -s -X POST "$LIB_FEISHU_WEBHOOK" \
+                -H 'Content-Type: application/json' \
+                -d "$payload" >/dev/null 2>&1
+        ) &
+    fi
+}
+
+# Send notification to configured channels (Telegram and/or Feishu)
+# Backward-compatible entry point used throughout shell scripts.
 # Usage: send_telegram "message text"
 send_telegram() {
     local msg="${1:-}"
@@ -667,6 +716,7 @@ send_telegram() {
         curl -s -X POST "https://api.telegram.org/bot${LIB_TG_TOKEN}/sendMessage" \
             -d chat_id="${LIB_TG_CHAT}" --data-urlencode "text=${msg}" >/dev/null 2>&1 &
     fi
+    send_feishu "$msg"
 }
 
 # mkdir-based lock with stale timeout (macOS compatible, no flock)
