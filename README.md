@@ -139,6 +139,8 @@ EOF
 #    feishu:
 #      webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
 #      secret: "optional-bot-secret"
+#      message_format: "text"   # or "post"
+#      title: "Autopilot Notification"
 # 3. Create tmux session + start Codex
 tmux new-session -s autopilot -n ProjectA
 codex --full-auto

@@ -163,6 +163,8 @@ telegram:
 feishu:
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
   secret: "OPTIONAL_BOT_SECRET"
+  message_format: "text"   # or "post"
+  title: "Autopilot Notification"
 ```
 
 ## Usage

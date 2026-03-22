@@ -244,6 +244,8 @@ telegram:
 feishu:
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
   secret: "optional-bot-secret"
+  message_format: "text"   # 或 "post"
+  title: "Autopilot Notification"
 
 # 3. 创建 tmux session
 tmux new-session -s autopilot -n ProjectA

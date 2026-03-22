@@ -41,9 +41,12 @@ telegram:
 # webhook_url 示例：
 #   https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx
 # 如果机器人开启了“签名校验”，再填写 secret
+# message_format 可选: text | post
 feishu:
   webhook_url: "YOUR_FEISHU_WEBHOOK_URL"
   secret: "YOUR_FEISHU_BOT_SECRET"
+  message_format: "text"
+  title: "Autopilot Notification"
 
 # 项目目录列表 (简单模式)
 # 添加你要自动驾驶的项目路径
