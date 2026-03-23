@@ -1,18 +1,29 @@
 ---
 name: codex-autopilot
+version: 0.7.0
 description: |
-  tmux + launchd multi-project Codex CLI automation system. Watchdog-driven loop that monitors multiple Codex sessions in tmux, auto-nudges idle sessions, handles permissions, manages context compaction, runs incremental code reviews, and dispatches tasks from a queue.
-  Use when managing multiple concurrent Codex CLI coding sessions, automating development workflows, or orchestrating parallel AI-assisted coding across projects.
-  Triggers: autopilot, watchdog, codex automation, tmux codex, multi-project codex, auto-nudge codex, codex session management.
+  Multi-model AI coding automation system with intelligent task routing. Watchdog-driven loop that orchestrates Codex (backend) and Gemini (frontend) sessions in tmux, auto-routes tasks by type, manages context compaction, runs incremental code reviews, and dispatches tasks from a priority queue.
+  Use when managing multiple concurrent AI coding sessions, automating development workflows, orchestrating parallel AI-assisted coding across projects, or routing frontend vs backend tasks to different models.
+  Triggers: autopilot, watchdog, codex automation, tmux codex, multi-project codex, auto-nudge codex, codex session management, gemini frontend, multi-model routing, ai task routing.
 ---
 
 # Codex Autopilot
 
-Automated multi-project Codex CLI orchestration via tmux + launchd on macOS.
+Multi-model AI coding orchestration via tmux + launchd on macOS.
 
 ## Overview
 
-Codex Autopilot runs a watchdog loop that monitors multiple Codex CLI sessions in tmux windows. It detects idle sessions, auto-nudges them to continue, handles permission prompts, rotates logs, dispatches tasks from a queue, and sends notifications via Discord/Telegram.
+Codex Autopilot runs a watchdog loop that orchestrates multiple AI coding sessions in tmux. It features **intelligent task routing** — frontend tasks (UI, components, H5) are routed to Gemini CLI (1M context window, superior design aesthetics), while backend tasks (API, database, deployment) go to Codex CLI. The watchdog detects idle sessions, auto-nudges them, handles permission prompts, dispatches tasks from a priority queue, and sends notifications via Discord/Telegram.
+
+### Multi-Model Architecture
+
+| Role | Model | Strengths |
+|------|-------|-----------|
+| Backend coding | Codex (GPT-5.4) | API, database, deployment, refactoring |
+| Frontend development | Gemini CLI | UI, components, pages, styles, 1M context |
+| Orchestration | Claude / OpenClaw | Task routing, code review, project management |
+
+Tasks are automatically classified by keywords and routed to the appropriate model. Frontend tasks fall back to Codex if Gemini is unavailable.
 
 ## Installation
 
@@ -141,6 +152,16 @@ project_dirs:
   - "~/project-beta"
 ```
 
+### Gemini Frontend Routing
+```yaml
+gemini:
+  default_window: "gemini-h5"        # Default tmux window for frontend tasks
+  project_windows:
+    youxin: "gemini-youxin"          # Per-project Gemini window overrides
+```
+
+Frontend task detection keywords: `页面`, `组件`, `样式`, `UI`, `前端`, `H5`, `小程序`, `界面`, `frontend`, `component`, `style`, `page`, `layout`
+
 ### Discord Channel Routing
 ```yaml
 discord_channels:
@@ -196,8 +217,11 @@ telegram:
 # Send a command to a tmux window
 ./scripts/tmux-send.sh my-project "codex exec 'fix the tests'"
 
-# Enqueue a task
-./scripts/task-queue.sh enqueue my-project "Refactor auth module"
+# Enqueue a backend task (routes to Codex)
+./scripts/task-queue.sh add my-project "Refactor auth module"
+
+# Enqueue a frontend task (routes to Gemini)
+./scripts/task-queue.sh add my-project "重构登录页面组件" normal --type frontend
 
 # Run the watchdog once (for testing)
 ./scripts/watchdog.sh
