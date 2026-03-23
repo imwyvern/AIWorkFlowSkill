@@ -161,7 +161,45 @@ Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
 | `scripts/prd_verify_engine.py` | ~500 | PRD 验证引擎 — checker 插件系统，"proof of done" |
 | `scripts/codex-token-daily.py` | ~380 | Token 用量统计（从 Codex JSONL 会话提取） |
 
-### 智能 Nudge 决策树（v0.5.0）
+### 多模型任务路由（v0.6.0）
+
+```
+任务队列
+├─ type: frontend/ui/h5  → 🎨 Gemini tmux 窗口（设计优化）
+├─ type: bugfix/feature   → 🔧 Codex tmux 窗口（代码优化）
+├─ Codex 额度耗尽         → 🤖 Claude AgentTeam 兜底
+└─ Gemini 不可用          → 🔧 Codex 兜底（优雅降级）
+```
+
+| 角色 | 模型 | 方式 | 擅长 |
+|------|------|------|------|
+| **策划/调度** | Claude (OpenClaw) | 直接回答 | 需求分析、方案讨论、项目管理 |
+| **后端编码** | Codex (GPT-5.4) | tmux 持久 session | API、数据库、部署、持续迭代 |
+| **前端开发** | Gemini CLI | tmux（→ ACP） | UI、组件、页面、样式、1M 上下文、视觉设计 |
+
+**配置：**
+
+```yaml
+# config.yaml
+gemini:
+  default_window: "gemini-h5"     # 默认 Gemini tmux 窗口
+  project_windows:                # 项目特定映射
+    youxin: "gemini-youxin"
+```
+
+**使用：**
+
+```bash
+# 前端任务自动路由到 Gemini
+task-queue.sh add myproject "实现登录页" normal --type frontend
+
+# 后端任务仍走 Codex
+task-queue.sh add myproject "修复认证 API" high --type bugfix
+```
+
+前端任务自动注入 Anti-AI-Slop prompt：布局检查、Design System 一致性、交互状态全覆盖（loading/empty/error/success）。
+
+### 智能 Nudge 决策树
 
 ```
 Codex idle
@@ -169,16 +207,18 @@ Codex idle
 ├─ PRD 完成 + 无 pending issues？
 │   ├─ review 有问题？→ nudge #N/5（5 次退避上限，无 commit 则暂停）
 │   ├─ 队列有任务？→ 绕过冷却，消费队列
+│   │   ├─ type=frontend？→ 路由到 Gemini 窗口
+│   │   └─ type=其他？    → 路由到 Codex 窗口
 │   └─ 真的没事 → 🛑 完全停止 nudge（不浪费 token）
 │
 ├─ 优先级 1: compact 刚完成？→ 恢复 nudge（含上下文快照）
-├─ 优先级 2: 队列有任务？→ 消费队列，发任务给 Codex
+├─ 优先级 2: 队列有任务？→ 消费队列
 ├─ 优先级 3: autocheck/PRD 有问题？→ nudge 修复
-├─ 兜底: 无任何待办 → 💤 跳过（不再用 smart nudge "找事做"）
-└─ dirty tree？→ 催提交（覆盖以上 nudge 内容）
+├─ 兜底: 无任何待办 → 💤 跳过
+└─ dirty tree？→ 催提交
 ```
 
-**核心原则：有任务才 nudge，没任务就安静。**
+**核心原则：有任务才 nudge，没任务就安静。前端找 Gemini，后端找 Codex。**
 
 ### 任务追踪与完成通知
 
@@ -324,6 +364,7 @@ AIWorkFlowSkill/
 
 | 版本 | 日期 | 更新 |
 |------|------|------|
+| **0.6.0** | 2026-03-22 | 多模型路由（Gemini 前端 + Codex 后端）、Anti-AI-Slop prompt 注入、测试 Agent、分支隔离 |
 | **0.5.0** | 2026-03-03 | 智能 nudge（无任务不 nudge）、任务追踪通知、Discord 路由、队列并发锁/超时回收、review 退避、BFS 进程树检测 |
 | **0.4.0** | 2026-03-01 | ClawHub 发布、Discord→Autopilot 路由、安全修复 |
 | **2.0.0** | 2026-02-12 | Autopilot 引擎: watchdog v6、三层 tmux 发送、任务队列、compact 上下文快照、PRD 验证引擎 |
