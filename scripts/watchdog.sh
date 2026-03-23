@@ -127,6 +127,86 @@ TEST_AGENT_ENABLED="false"
 TEST_AGENT_TRIGGER_REVIEW_CLEAN="true"
 TEST_AGENT_TRIGGER_ON_COMMIT_EVALUATE="true"
 
+# Gemini 前端路由（过渡方案，ACP 稳定后切换）
+# 格式: "项目名:tmux窗口名" — 指定该项目的 frontend 任务发到哪个 Gemini 窗口
+# 如果项目没有对应的 Gemini 窗口，frontend 任务仍走 Codex
+GEMINI_WINDOWS=()
+GEMINI_DEFAULT_WINDOW=""  # 没有项目特定映射时的默认 Gemini 窗口
+
+load_gemini_config() {
+    local yaml_file="$1"
+    [ -f "$yaml_file" ] || return 0
+
+    GEMINI_DEFAULT_WINDOW=$(grep -A5 '^gemini:' "$yaml_file" 2>/dev/null | grep 'default_window:' | sed 's/.*default_window: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ' || true)
+
+    local mapping_lines
+    mapping_lines=$(awk '/^gemini:/,/^[^ ]/{print}' "$yaml_file" 2>/dev/null | awk '/project_windows:/,/^[^ ]{2}/' | grep -E '^\s+\w+:' | sed 's/^ *//' || true)
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local proj win
+        proj=$(echo "$line" | cut -d: -f1 | tr -d ' ')
+        win=$(echo "$line" | cut -d: -f2- | tr -d ' "')
+        [ -n "$proj" ] && [ -n "$win" ] && GEMINI_WINDOWS+=("${proj}:${win}")
+    done <<< "$mapping_lines"
+}
+
+get_gemini_window() {
+    local project="$1"
+    local safe
+    safe=$(echo "$project" | tr -cd 'a-zA-Z0-9_-' | tr '[:upper:]' '[:lower:]')
+
+    for entry in "${GEMINI_WINDOWS[@]}"; do
+        local p="${entry%%:*}"
+        local w="${entry#*:}"
+        if [ "$p" = "$safe" ] || [ "$p" = "$project" ]; then
+            echo "$w"
+            return 0
+        fi
+    done
+
+    # fallback to default
+    if [ -n "$GEMINI_DEFAULT_WINDOW" ]; then
+        echo "$GEMINI_DEFAULT_WINDOW"
+        return 0
+    fi
+
+    return 1
+}
+
+is_frontend_task() {
+    local task_type="$1"
+    task_type=$(printf '%s\n' "$task_type" | tr '[:upper:]' '[:lower:]')
+    case "$task_type" in
+        frontend|ui|h5) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+send_gemini_message() {
+    local gemini_window="$1" message="$2"
+    local output rc
+
+    # 检查 Gemini tmux 窗口是否存在
+    if ! tmux has-session -t "${gemini_window%%:*}" 2>/dev/null; then
+        log "⚠️ Gemini window ${gemini_window} not found, falling back to Codex"
+        return 1
+    fi
+
+    # 发送到 Gemini（和 Codex 一样用 tmux send-keys）
+    tmux send-keys -t "$gemini_window" -l "$message" 2>/dev/null
+    sleep 2
+    tmux send-keys -t "$gemini_window" Enter 2>/dev/null
+    rc=$?
+
+    if [ "$rc" -ne 0 ]; then
+        log "❌ Gemini send to ${gemini_window} failed (rc=${rc})"
+        return "$rc"
+    fi
+
+    log "🎨 Gemini: sent frontend task to ${gemini_window}"
+    return 0
+}
+
 # ---- 工具函数 ----
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"
@@ -193,6 +273,12 @@ load_projects() {
             log "⚠️ project config missing/empty, fallback to defaults (${#PROJECTS[@]} projects)"
             ;;
     esac
+
+    # 加载 Gemini 前端路由配置
+    load_gemini_config "$CONFIG_YAML_FILE"
+    if [ -n "$GEMINI_DEFAULT_WINDOW" ] || [ "${#GEMINI_WINDOWS[@]}" -gt 0 ]; then
+        log "🎨 Gemini routing: default=${GEMINI_DEFAULT_WINDOW:-none}, project mappings=${#GEMINI_WINDOWS[@]}"
+    fi
 }
 
 load_branch_isolation_config() {
@@ -407,6 +493,9 @@ build_task_prompt_by_type() {
             ;;
         review|review_fix)
             printf '任务类型: review\n要求: 优先修复高优先级问题（P1/P2），修改后说明验证方式并提交。\n任务: %s' "$task_desc"
+            ;;
+        frontend|ui|h5)
+            printf '任务类型: frontend\n要求: 实现前端页面/组件/样式，确保响应式和交互状态覆盖（loading/empty/error/success），自查 Anti-AI-Slop 清单，design system 一致性。完成后自查：布局是否模板化？有没有通用渐变/3列grid？空状态有温度吗？间距有节奏感吗？\n任务: %s' "$task_desc"
             ;;
         *)
             printf '任务类型: %s\n任务: %s' "$task_type" "$task_desc"
@@ -1213,6 +1302,31 @@ handle_idle() {
                 set_cooldown "$key"
                 echo 0 > "$nudge_count_file"
                 sync_project_status "$project_dir" "claude_fallback" "window=${window}" "state=idle"
+            elif is_frontend_task "$queue_task_type"; then
+                # 前端任务 → 路由到 Gemini tmux 窗口
+                local gemini_win
+                gemini_win=$(get_gemini_window "$safe" 2>/dev/null || true)
+                nudge_msg=$(build_task_prompt_by_type "$queue_task_type" "${queue_task:0:280}")
+                if [ -n "$gemini_win" ] && send_gemini_message "$gemini_win" "$nudge_msg"; then
+                    "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
+                    set_cooldown "$key"
+                    echo 0 > "$nudge_count_file"
+                    log "🎨 ${window}: frontend task routed to Gemini(${gemini_win}) — ${nudge_msg:0:80}"
+                    sync_project_status "$project_dir" "gemini_task_sent" "window=${gemini_win}" "state=idle"
+                    send_telegram "🎨 ${window}: 前端任务已发送到 Gemini(${gemini_win}) — ${nudge_msg:0:100}"
+                else
+                    # Gemini 不可用，降级到 Codex
+                    log "⚠️ ${window}: Gemini unavailable, falling back to Codex for frontend task"
+                    if send_tmux_message "$window" "$nudge_msg" "queue task (frontend→codex fallback)" "$queue_task_type" "auto"; then
+                        "${SCRIPT_DIR}/task-queue.sh" start "$safe" 2>/dev/null || true
+                        set_cooldown "$key"
+                        echo 0 > "$nudge_count_file"
+                        log "📋 ${window}: frontend task sent to Codex (Gemini fallback) — ${nudge_msg:0:80}"
+                        start_nudge_ack_check "$window" "$safe" "$project_dir" "$before_head" "$before_ctx" "queue task"
+                        sync_project_status "$project_dir" "queue_task_sent" "window=${window}" "state=idle"
+                        send_telegram "📋 ${window}: 前端任务降级到 Codex — ${nudge_msg:0:100}"
+                    fi
+                fi
             else
                 # 正常 Codex 派发
                 nudge_msg=$(build_task_prompt_by_type "$queue_task_type" "${queue_task:0:280}")
