@@ -82,11 +82,51 @@ User (Telegram) → "Fix white-screen bug"
   → Review clean → Discord notification "✅ Bug fixed"
 ```
 
+### Multi-Model Task Routing
+
+```
+Task Queue
+├─ type: frontend/ui/h5  → 🎨 Gemini tmux window (design-optimized)
+├─ type: bugfix/feature   → 🔧 Codex tmux window (code-optimized)
+├─ Codex limit exhausted  → 🤖 Claude AgentTeam fallback
+└─ Gemini unavailable     → 🔧 Codex fallback (graceful degradation)
+```
+
+| Role | Model | Method | Best At |
+|------|-------|--------|---------|
+| **Orchestrator** | Claude (OpenClaw) | Direct | Planning, reviews, communication |
+| **Backend Dev** | Codex (GPT-5.4) | tmux persistent | APIs, databases, deployment |
+| **Frontend Dev** | Gemini CLI | tmux (→ ACP) | UI, components, 1M context, visual design |
+
+**Configuration:**
+
+```yaml
+# config.yaml
+gemini:
+  default_window: "gemini-h5"    # Default Gemini tmux window
+  project_windows:               # Per-project mapping
+    youxin: "gemini-youxin"
+```
+
+**Usage:**
+
+```bash
+# Frontend tasks route to Gemini automatically
+task-queue.sh add myproject "Build login page" normal --type frontend
+
+# Backend tasks still go to Codex
+task-queue.sh add myproject "Fix auth API" high --type bugfix
+```
+
+Frontend tasks include Anti-AI-Slop prompt injection: layout checks, design system consistency, interaction state coverage (loading/empty/error/success).
+
 ### Smart Nudge Decision Tree
 
 ```
 Codex idle
 ├─ Queue has tasks? → consume queue (bypass cooldown)
+│   ├─ type=frontend? → route to Gemini window
+│   └─ type=other?    → route to Codex window
 ├─ Review has issues? → nudge #N/5 (5-attempt cap, backoff)
 ├─ Compact just finished? → resume with context snapshot
 ├─ PRD has issues? → nudge fix
@@ -183,6 +223,7 @@ AIWorkFlowSkill/
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **0.6.0** | 2026-03-22 | Multi-model routing (Gemini frontend + Codex backend), Anti-AI-Slop prompt, test agent, branch isolation |
 | **0.5.0** | 2026-03-03 | Smart nudge, task tracking, Discord routing, queue locks |
 | **0.4.0** | 2026-03-01 | ClawHub release, Discord→Autopilot routing |
 | **2.0.0** | 2026-02-12 | Autopilot engine v6, task queue, compact snapshot, PRD verification |
