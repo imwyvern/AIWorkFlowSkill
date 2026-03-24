@@ -1,10 +1,10 @@
 ---
 name: codex-autopilot
-version: 0.7.0
+version: 0.7.1
 description: |
-  Multi-model AI coding automation system with intelligent task routing. Watchdog-driven loop that orchestrates Codex (backend) and Gemini (frontend) sessions in tmux, auto-routes tasks by type, manages context compaction, runs incremental code reviews, and dispatches tasks from a priority queue.
-  Use when managing multiple concurrent AI coding sessions, automating development workflows, orchestrating parallel AI-assisted coding across projects, or routing frontend vs backend tasks to different models.
-  Triggers: autopilot, watchdog, codex automation, tmux codex, multi-project codex, auto-nudge codex, codex session management, gemini frontend, multi-model routing, ai task routing.
+  Multi-model AI coding automation system with intelligent task routing and built-in CI/CD. Watchdog-driven loop that orchestrates Codex (backend) and Gemini (frontend) sessions in tmux, auto-routes tasks by type, manages context compaction, runs incremental code reviews, dispatches tasks from a priority queue, and includes a test-agent that auto-detects failures, enqueues fixes, and ratchets coverage.
+  Use when managing multiple concurrent AI coding sessions, automating development workflows, orchestrating parallel AI-assisted coding across projects, routing frontend vs backend tasks to different models, or running continuous testing with auto-fix.
+  Triggers: autopilot, watchdog, codex automation, tmux codex, multi-project codex, auto-nudge codex, codex session management, gemini frontend, multi-model routing, ai task routing, ci cd, test agent, coverage ratchet.
 ---
 
 # Codex Autopilot
@@ -101,6 +101,23 @@ Task queue manager. Supports:
 ### discord-notify.sh
 Sends formatted notifications to Discord channels via webhook. Supports project-channel routing defined in `config.yaml`.
 
+### test-agent.sh
+Built-in CI/CD that runs on every commit. Evaluates test suites, tracks coverage, and **auto-enqueues bugfix tasks** when tests fail.
+
+```
+commit → watchdog detects → test-agent evaluate
+  ├─ all pass → review clean → enqueue coverage tasks for low-coverage files
+  └─ failures → parse log → auto-enqueue "fix(test): ..." bugfix task
+       └─ 1h cooldown per file (prevents retry loops)
+```
+
+**Triggers:**
+- `on_commit_evaluate` — every new commit
+- `on_review_clean` — after code review passes
+- `nightly` — scheduled full evaluation (default 02:30)
+
+**Coverage ratchet:** global coverage must not regress; weekly +1% target, capped at 90%.
+
 ### Other Scripts
 
 | Script | Purpose |
@@ -117,6 +134,7 @@ Sends formatted notifications to Discord channels via webhook. Supports project-
 | `prd-audit.sh` | Audit PRD completion status |
 | `prd-verify.sh` / `prd_verify_engine.py` | Verify PRD items against codebase |
 | `codex-token-daily.py` | Track daily token usage |
+| `coverage-collect.sh` | Collect and merge coverage reports |
 
 ## Configuration
 
