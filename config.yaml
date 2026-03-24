@@ -53,7 +53,7 @@ project_dirs:
 
 # 项目级配置（用于 monorepo/特殊测试编排）
 projects:
-  shike:
+  Shike:
     dir: "/Users/wes/Shike"
     test_agent:
       mode: "monorepo"
@@ -71,6 +71,12 @@ projects:
         trigger: "nightly"
         timeout: 120
         notify_on_failure: true
+  replyher_android-2:
+    dir: "/Users/wes/replyher_android-2"
+  kpw-bot-js:
+    dir: "/Users/wes/clawd/kpw-bot-js"
+  autopilot-dev:
+    dir: "/Users/wes/.autopilot"
 
 # Discord 频道与项目路由映射
 discord_channels:

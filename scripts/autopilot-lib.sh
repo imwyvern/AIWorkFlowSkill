@@ -100,6 +100,7 @@ autopilot_parse_projects_from_config_yaml() {
     BEGIN {
         in_projects = 0
         projects_indent = -1
+        item_indent = -1
         list_mode = 0
         saw_projects = 0
         parse_error = 0
@@ -116,6 +117,7 @@ autopilot_parse_projects_from_config_yaml() {
                 in_projects = 1
                 match(line, /^[[:space:]]*/)
                 projects_indent = RLENGTH
+                item_indent = -1
                 list_mode = 0
             }
             next
@@ -129,6 +131,39 @@ autopilot_parse_projects_from_config_yaml() {
             flush_item()
             in_projects = 0
             next
+        }
+
+        # Track item-level indent (first child under projects:)
+        # and skip anything nested deeper (e.g. test_agent sub-keys)
+        if (item_indent == -1) {
+            item_indent = indent
+        } else if (indent > item_indent) {
+            # This line is nested inside a project item — only parse
+            # recognized sub-keys (window/name/dir/path) at exactly
+            # item_indent+2 (or item_indent+N for typical YAML indent).
+            # For map-style projects, sub-keys like "dir:" are at
+            # item_indent + step. Deeper nesting (test_agent children)
+            # should be skipped.
+            content = substr(line, indent + 1)
+            content = trim(strip_inline_comment(content))
+            if (content == "") next
+            split_pos = index(content, ":")
+            if (split_pos == 0) next
+            key = strip_quotes(trim(substr(content, 1, split_pos - 1)))
+            value = trim(strip_quotes(strip_inline_comment(substr(content, split_pos + 1))))
+            if (value == "") next
+            if (key == "window" || key == "name") {
+                current_window = value
+                if (current_window != "" && current_dir != "") flush_item()
+            } else if (key == "dir" || key == "project_dir" || key == "path") {
+                current_dir = value
+                if (current_window != "" && current_dir != "") flush_item()
+            }
+            # Skip all other nested keys (test_agent, coverage, e2e, etc.)
+            next
+        } else {
+            # Same indent as item level — new project item
+            flush_item()
         }
 
         content = substr(line, indent + 1)
@@ -152,8 +187,15 @@ autopilot_parse_projects_from_config_yaml() {
         value = trim(strip_quotes(strip_inline_comment(substr(content, split_pos + 1))))
 
         if (value == "") {
+            # Map-style: "shike:" with no value means this is a project
+            # name (window) with sub-keys on following lines.
+            # Only treat it as window if at item_indent level.
             if (key == "window" || key == "name" || key == "dir" || key == "project_dir" || key == "path") {
                 parse_error = 1
+            } else if (list_mode == 0) {
+                # Map-style project name (e.g. "shike:") — set as window,
+                # dir will come from a "dir:" sub-key
+                current_window = key
             }
             next
         }
