@@ -137,7 +137,7 @@ load_gemini_config() {
     local yaml_file="$1"
     [ -f "$yaml_file" ] || return 0
 
-    GEMINI_DEFAULT_WINDOW=$(grep -A5 '^gemini:' "$yaml_file" 2>/dev/null | grep 'default_window:' | sed 's/.*default_window: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ' || true)
+    GEMINI_DEFAULT_WINDOW=$(grep -A5 '^gemini:' "$yaml_file" 2>/dev/null | grep 'default_window:' | sed 's/#.*//' | sed 's/.*default_window: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ' || true)
 
     # 读取 approval_mode（yolo/auto_edit/default）
     local mode
@@ -150,7 +150,7 @@ load_gemini_config() {
         [ -z "$line" ] && continue
         local proj win
         proj=$(echo "$line" | cut -d: -f1 | tr -d ' ')
-        win=$(echo "$line" | cut -d: -f2- | tr -d ' "')
+        win=$(echo "$line" | sed 's/#.*//' | cut -d: -f2- | tr -d ' "')
         [ -n "$proj" ] && [ -n "$win" ] && GEMINI_WINDOWS+=("${proj}:${win}")
     done <<< "$mapping_lines"
 }
@@ -308,20 +308,11 @@ load_projects() {
 
     if [ "${#PROJECTS[@]}" -eq 0 ]; then
         PROJECTS=("${DEFAULT_PROJECTS[@]}")
-        AUTOPILOT_PROJECT_SOURCE="defaults"
+        log "⚠️ project config missing/empty, fallback to defaults (${#PROJECTS[@]} projects)"
+    else
+        # AUTOPILOT_PROJECT_SOURCE is set in subshell and lost; infer source
+        log "📁 loaded ${#PROJECTS[@]} projects from config"
     fi
-
-    case "${AUTOPILOT_PROJECT_SOURCE:-defaults}" in
-        "config.yaml")
-            log "📁 loaded ${#PROJECTS[@]} projects from config.yaml"
-            ;;
-        "watchdog-projects.conf")
-            log "⚠️ config.yaml projects missing/invalid, fallback to watchdog-projects.conf (${#PROJECTS[@]} projects)"
-            ;;
-        *)
-            log "⚠️ project config missing/empty, fallback to defaults (${#PROJECTS[@]} projects)"
-            ;;
-    esac
 
     # 加载 Gemini 前端路由配置
     load_gemini_config "$CONFIG_YAML_FILE"
