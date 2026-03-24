@@ -99,6 +99,7 @@ discord_channels:
 # type=frontend/ui/h5 的队列任务会路由到 Gemini tmux 窗口
 gemini:
   default_window: "gemini-h5"   # 默认 Gemini tmux 窗口
+  approval_mode: "yolo"         # yolo=全自动批准 | auto_edit=自动批文件写入 | default=手动确认
   project_windows:              # 项目特定映射（可选）
     youxin: "gemini-youxin"     # 有信前端 → 专用 Gemini 窗口
     shike: "gemini-shike"       # 识客前端 → 专用 Gemini 窗口

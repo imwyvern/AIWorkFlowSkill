@@ -139,6 +139,11 @@ load_gemini_config() {
 
     GEMINI_DEFAULT_WINDOW=$(grep -A5 '^gemini:' "$yaml_file" 2>/dev/null | grep 'default_window:' | sed 's/.*default_window: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ' || true)
 
+    # 读取 approval_mode（yolo/auto_edit/default）
+    local mode
+    mode=$(grep -A5 '^gemini:' "$yaml_file" 2>/dev/null | grep 'approval_mode:' | sed 's/.*approval_mode: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ' || true)
+    [ -n "$mode" ] && GEMINI_APPROVAL_MODE="$mode"
+
     local mapping_lines
     mapping_lines=$(awk '/^gemini:/,/^[^ ]/{print}' "$yaml_file" 2>/dev/null | awk '/project_windows:/,/^[^ ]{2}/' | grep -E '^\s+\w+:' | sed 's/^ *//' || true)
     while IFS= read -r line; do
@@ -182,12 +187,56 @@ is_frontend_task() {
     esac
 }
 
+GEMINI="${GEMINI_BIN:-$(command -v gemini || echo /opt/homebrew/bin/gemini)}"
+
+# Gemini approval mode: yolo (auto-approve all), auto_edit, default
+GEMINI_APPROVAL_MODE="${GEMINI_APPROVAL_MODE:-yolo}"
+
+ensure_gemini_session() {
+    local gemini_window="$1"
+    local session_name="${gemini_window%%:*}"
+    local window_name="${gemini_window#*:}"
+    local project_dir="$2"  # optional workdir
+
+    # 检查窗口是否已存在且 Gemini 正在运行
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        local pane_content
+        pane_content=$(tmux capture-pane -t "$gemini_window" -p 2>/dev/null | tail -5)
+        if echo "$pane_content" | grep -q "Type your message\|esc to cancel"; then
+            return 0  # Gemini 已在运行
+        fi
+        # 窗口存在但 Gemini 没运行 — 检查是否有 shell prompt
+        if echo "$pane_content" | grep -q '^\$\|^%\|^❯'; then
+            log "🔄 Gemini not running in ${gemini_window}, starting with --${GEMINI_APPROVAL_MODE}..."
+            local cd_cmd=""
+            [ -n "$project_dir" ] && cd_cmd="cd ${project_dir} && "
+            tmux send-keys -t "$gemini_window" "${cd_cmd}${GEMINI} --approval-mode ${GEMINI_APPROVAL_MODE}" Enter
+            sleep 8  # Gemini 启动需要几秒
+            return 0
+        fi
+    fi
+
+    # 窗口不存在 — 创建
+    if ! tmux has-session -t "$session_name" 2>/dev/null; then
+        log "⚠️ tmux session ${session_name} not found"
+        return 1
+    fi
+
+    local start_dir="${project_dir:-.}"
+    tmux new-window -t "$session_name" -n "$window_name" -c "$start_dir" 2>/dev/null
+    sleep 1
+    tmux send-keys -t "$gemini_window" "${GEMINI} --approval-mode ${GEMINI_APPROVAL_MODE}" Enter
+    sleep 8  # 等待 Gemini 启动
+    log "🚀 Gemini started in ${gemini_window} (--${GEMINI_APPROVAL_MODE})"
+    return 0
+}
+
 send_gemini_message() {
     local gemini_window="$1" message="$2"
     local output rc
 
-    # 检查 Gemini tmux 窗口是否存在
-    if ! tmux has-session -t "${gemini_window%%:*}" 2>/dev/null; then
+    # 自动确保 Gemini 窗口存在且运行
+    if ! ensure_gemini_session "$gemini_window"; then
         log "⚠️ Gemini window ${gemini_window} not found, falling back to Codex"
         return 1
     fi
