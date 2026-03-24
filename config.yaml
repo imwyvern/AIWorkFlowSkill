@@ -101,7 +101,7 @@ gemini:
   default_window: "gemini-h5"   # 默认 Gemini tmux 窗口
   project_windows:              # 项目特定映射（可选）
     youxin: "gemini-youxin"     # 有信前端 → 专用 Gemini 窗口
-    # shike: "gemini-shike"     # 按需添加
+    shike: "gemini-shike"       # 识客前端 → 专用 Gemini 窗口
 
 # Branch 隔离模式（Phase 1）
 branch_isolation:
