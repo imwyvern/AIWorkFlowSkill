@@ -124,6 +124,9 @@ fi
 MSG_TRUNCATED="${MSG:0:1990}"
 
 curl -s -X POST \
+  --retry 2 \
+  --retry-delay 3 \
+  --retry-connrefused \
   --connect-timeout 5 \
   --max-time 15 \
   -H "Authorization: Bot $BOT_TOKEN" \
