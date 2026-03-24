@@ -145,11 +145,17 @@ load_gemini_config() {
     [ -n "$mode" ] && GEMINI_APPROVAL_MODE="$mode"
 
     local mapping_lines
-    mapping_lines=$(awk '/^gemini:/,/^[^ ]/{print}' "$yaml_file" 2>/dev/null | awk '/project_windows:/,/^[^ ]{2}/' | grep -E '^\s+\w+:' | sed 's/^ *//' || true)
+    mapping_lines=$(awk '
+        /^gemini:/ { in_gemini = 1; next }
+        in_gemini && /^[^ ]/ { in_gemini = 0 }
+        in_gemini && /project_windows:/ { in_pw = 1; next }
+        in_pw && /^[^ ]/ { in_pw = 0 }
+        in_pw && /^    [a-zA-Z]/ { print }
+    ' "$yaml_file" 2>/dev/null || true)
     while IFS= read -r line; do
         [ -z "$line" ] && continue
         local proj win
-        proj=$(echo "$line" | cut -d: -f1 | tr -d ' ')
+        proj=$(echo "$line" | sed 's/#.*//' | cut -d: -f1 | tr -d ' ')
         win=$(echo "$line" | sed 's/#.*//' | cut -d: -f2- | tr -d ' "')
         [ -n "$proj" ] && [ -n "$win" ] && GEMINI_WINDOWS+=("${proj}:${win}")
     done <<< "$mapping_lines"
