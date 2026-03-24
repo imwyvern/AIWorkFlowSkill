@@ -154,6 +154,7 @@ Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
 | `scripts/tmux-send.sh` | ~480 | 三层消息发送 + 任务追踪（`--track` 自动记录任务来源，watchdog 检测完成后通知） |
 | `scripts/monitor-all.sh` | ~450 | 10 分钟全局监控 + Telegram 报告（commit、context、lifecycle） |
 | `scripts/task-queue.sh` | ~350 | 任务队列 CRUD — 支持优先级、并发锁、超时回收、来源追踪 |
+| `scripts/test-agent.sh` | ~790 | 测试/覆盖率编排、覆盖率缺口任务入队、测试失败自动解析并入队 bugfix 修复任务 |
 | `scripts/consume-review-trigger.sh` | ~450 | Layer 2 代码审查消费者（触发文件驱动，输出完整性检查） |
 | `scripts/discord-notify.sh` | ~180 | Discord 通知 — 按项目频道映射推送（config.yaml 驱动） |
 | `scripts/autopilot-lib.sh` | ~350 | 共享函数库 — 项目加载、Discord 映射、文件工具 |
@@ -175,7 +176,7 @@ Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
 |------|------|------|------|
 | **策划/调度** | Claude (OpenClaw) | 直接回答 | 需求分析、方案讨论、项目管理 |
 | **后端编码** | Codex (GPT-5.4) | tmux 持久 session | API、数据库、部署、持续迭代 |
-| **前端开发** | Gemini CLI | tmux（→ ACP） | UI、组件、页面、样式、1M 上下文、视觉设计 |
+| **前端开发** | Gemini CLI (`gemini-3.1-pro-preview`) | tmux 持久 session | UI、组件、页面、样式、1M 上下文、视觉设计 |
 
 **配置：**
 
@@ -198,6 +199,53 @@ task-queue.sh add myproject "修复认证 API" high --type bugfix
 ```
 
 前端任务自动注入 Anti-AI-Slop prompt：布局检查、Design System 一致性、交互状态全覆盖（loading/empty/error/success）。
+前端任务当前不走 ACP，中转链路关闭，直接 tmux 持久 session 在现网更稳定。
+
+### CI/CD: Test Agent
+
+触发时机：
+- `on_commit_evaluate`：检测到 commit 后立即执行测试/覆盖率评估
+- `on_review_clean`：代码审查 CLEAN 后执行覆盖率缺口分析并入队测试任务
+- `nightly`：夜间定时评估覆盖率基线
+
+流程：
+
+```
+commit
+  → watchdog（检测新 commit）
+  → test-agent evaluate（运行测试 + 收集覆盖率）
+  → 通过：继续主流程；review clean 后触发覆盖率缺口分析并入队
+  → 失败：自动解析测试日志
+          → 提取失败测试文件 + 关键错误摘要
+          → 入队 "修复测试" bugfix 高优任务
+```
+
+覆盖率棘轮策略：
+- 每周 `+1%`
+- 上限 `90%`
+
+自动入队修复（`386a682` 引入）：
+- 解析 `$HOME/.autopilot/logs/test-agent-run-*.log` 与打包运行日志
+- 提取失败测试文件路径与关键错误行
+- 通过 `task-queue.sh add <project> ... high --type bugfix` 自动入队修复
+- 对同一失败目标做 1 小时冷却去重，防止失败重试死循环
+
+配置示例：
+
+```yaml
+test_agent:
+  enabled: true
+  trigger:
+    on_commit_evaluate: true
+    on_review_clean: true
+    nightly: "02:30"
+  queue:
+    max_tasks_per_round: 3
+  coverage:
+    changed_files_min: 80
+    ratchet_weekly: 1
+    ratchet_cap: 90
+```
 
 ### 智能 Nudge 决策树
 
@@ -364,6 +412,7 @@ AIWorkFlowSkill/
 
 | 版本 | 日期 | 更新 |
 |------|------|------|
+| **0.7.0** | 2026-03-24 | Test-agent 测试失败自动入队 bugfix 修复、discord-notify 重试、Gemini 以 tmux 作为主路径（不再 ACP 过渡） |
 | **0.6.0** | 2026-03-22 | 多模型路由（Gemini 前端 + Codex 后端）、Anti-AI-Slop prompt 注入、测试 Agent、分支隔离 |
 | **0.5.0** | 2026-03-03 | 智能 nudge（无任务不 nudge）、任务追踪通知、Discord 路由、队列并发锁/超时回收、review 退避、BFS 进程树检测 |
 | **0.4.0** | 2026-03-01 | ClawHub 发布、Discord→Autopilot 路由、安全修复 |
