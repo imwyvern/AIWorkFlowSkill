@@ -21,6 +21,8 @@ COVERAGE_COLLECTOR="${SCRIPT_DIR}/coverage-collect.sh"
 TASK_QUEUE="${SCRIPT_DIR}/task-queue.sh"
 DISCORD_NOTIFIER="${SCRIPT_DIR}/discord-notify.sh"
 RUN_LOG_BASENAME=".autopilot-test-run.log"
+TEST_FIX_COOLDOWN_SECONDS="${TEST_FIX_COOLDOWN_SECONDS:-3600}"
+TEST_FIX_MAX_AUTO_ENQUEUE="${TEST_FIX_MAX_AUTO_ENQUEUE:-3}"
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
 log() {
@@ -240,6 +242,7 @@ for package in packages:
     package["collect_rc"] = int(run_info.get("collect_rc", package.get("collect_rc", 0) or 0))
     package["test_cmd"] = run_info.get("test_cmd", package.get("test_cmd") or "")
     package["package_manager"] = run_info.get("package_manager", package.get("package_manager") or "")
+    package["log_path"] = run_info.get("log_path", package.get("log_path") or "")
     package["phase1_supported"] = (package.get("tool") or "") in supported_tools
 
 payload["project_dir"] = project_dir
@@ -277,7 +280,7 @@ evaluate_core() {
 
     while IFS= read -r package_item; do
         [ -n "$package_item" ] || continue
-        local package_dir relative_dir package_name tool package_manager run_rc test_cmd
+        local package_dir relative_dir package_name tool package_manager run_rc test_cmd run_log_path
         package_dir=$(echo "$package_item" | jq -r '.dir')
         relative_dir=$(echo "$package_item" | jq -r '.relative_dir // "."')
         package_name=$(echo "$package_item" | jq -r '.name')
@@ -285,12 +288,14 @@ evaluate_core() {
         package_manager=$(echo "$package_item" | jq -r '.package_manager // "npm"')
         run_rc=$(run_coverage_collection_cmd "$package_dir" "$tool" "$package_manager" "$package_name")
         test_cmd=$(build_framework_test_cmd "$tool" "$package_manager")
+        run_log_path="${package_dir}/${RUN_LOG_BASENAME}"
         jq -c -n \
             --arg relative_dir "$relative_dir" \
             --arg package_manager "$package_manager" \
             --arg test_cmd "$test_cmd" \
+            --arg log_path "$run_log_path" \
             --arg run_rc "$run_rc" \
-            '{relative_dir:$relative_dir,package_manager:$package_manager,test_cmd:$test_cmd,collect_rc:($run_rc|tonumber)}' >> "$tmp_run_results"
+            '{relative_dir:$relative_dir,package_manager:$package_manager,test_cmd:$test_cmd,log_path:$log_path,collect_rc:($run_rc|tonumber)}' >> "$tmp_run_results"
     done < <(echo "$packages_json" | jq -c '.packages[]?')
 
     raw_json=$("$COVERAGE_COLLECTOR" collect "$project_dir" 2>/dev/null || jq -n '{tool:"unknown",monorepo:false,package_count:0,packages:[],line_coverage:0,files:[],error:"collect_failed"}')
@@ -375,9 +380,228 @@ send_test_agent_notification() {
     "$DISCORD_NOTIFIER" --by-window "$window" "$message" >/dev/null 2>&1 || log "⚠️ ${window}: discord test-agent notify failed"
 }
 
+extract_failed_tests_from_eval_json() {
+    local eval_json="$1"
+    python3 - "$eval_json" <<'PYEOF'
+import hashlib
+import json
+import os
+import re
+import sys
+
+def strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+
+def normalize_path(value: str) -> str:
+    value = (value or "").strip().strip('"').strip("'")
+    value = value.replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:]
+    return value
+
+payload = json.loads(sys.argv[1] or "{}")
+cases = []
+seen = set()
+
+for pkg in payload.get("packages", []):
+    try:
+        rc = int(pkg.get("collect_rc", 0) or 0)
+    except Exception:
+        rc = 0
+    if rc == 0:
+        continue
+
+    package_name = (pkg.get("name") or "unknown").strip()
+    log_path = (pkg.get("log_path") or "").strip()
+    content = ""
+    if log_path and os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()[-500000:]
+        except Exception:
+            content = ""
+    content = strip_ansi(content)
+
+    file_path = ""
+    patterns = [
+        r"^\s*FAIL\s+([^\s]+)",
+        r"^\s*FAILURE:\s+([^\s]+)",
+        r"([A-Za-z0-9_./-]+\.(?:test|spec)\.(?:[cm]?js|jsx|tsx?|py|rb|go|java|kt))",
+    ]
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("Test Suites:"):
+            continue
+        m = re.search(patterns[0], line)
+        if not m:
+            m = re.search(patterns[1], line)
+        if not m:
+            m = re.search(patterns[3], line)
+        if m:
+            candidate = normalize_path(m.group(1))
+            if candidate and not candidate.startswith("node_modules/"):
+                file_path = candidate
+                break
+    if not file_path:
+        file_path = f"[{package_name}]"
+
+    error_line = ""
+    error_patterns = (
+        "AssertionError",
+        "TypeError",
+        "ReferenceError",
+        "SyntaxError",
+        "RangeError",
+        "Timeout",
+        "Error:",
+    )
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if any(token in line for token in error_patterns):
+            error_line = re.sub(r"\s+", " ", line)[:180]
+            break
+    if not error_line:
+        error_line = f"collect_rc={rc}"
+
+    # 去重维度按“包+测试文件”计算，避免同一文件在短时间内重复入队。
+    signature_raw = f"{package_name}|{file_path}"
+    signature = hashlib.sha1(signature_raw.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    if signature in seen:
+        continue
+    seen.add(signature)
+    cases.append(
+        {
+            "package": package_name,
+            "file": file_path,
+            "error": error_line,
+            "signature": signature,
+        }
+    )
+
+print(json.dumps({"cases": cases}, ensure_ascii=False))
+PYEOF
+}
+
+test_fix_cooldown_file() {
+    local safe="$1"
+    echo "${STATE_DIR}/test-agent-fix-cooldown-${safe}.tsv"
+}
+
+is_test_fix_cooldown_active() {
+    local safe="$1" key="$2" ttl="${3:-$TEST_FIX_COOLDOWN_SECONDS}"
+    local file now ts
+    file=$(test_fix_cooldown_file "$safe")
+    [ -f "$file" ] || return 1
+
+    now=$(now_ts)
+    ts=$(awk -F '\t' -v k="$key" '$2==k{print $1}' "$file" 2>/dev/null | tail -n1)
+    ts=$(normalize_int "$ts")
+    [ "$ts" -gt 0 ] || return 1
+    [ $((now - ts)) -lt "$ttl" ]
+}
+
+mark_test_fix_cooldown() {
+    local safe="$1" key="$2" ttl="${3:-$TEST_FIX_COOLDOWN_SECONDS}"
+    local file tmp now
+    file=$(test_fix_cooldown_file "$safe")
+    tmp=$(mktemp /tmp/test-agent-fix-cooldown.XXXXXX)
+    now=$(now_ts)
+
+    if [ -f "$file" ]; then
+        awk -F '\t' -v now="$now" -v ttl="$ttl" -v key="$key" '
+            NF >= 2 {
+                ts = $1 + 0
+                k = $2
+                if (k == key) next
+                if (ts <= 0) next
+                if ((now - ts) > (ttl * 6)) next
+                print ts "\t" k
+            }
+        ' "$file" > "$tmp" 2>/dev/null || true
+    fi
+    printf '%s\t%s\n' "$now" "$key" >> "$tmp"
+    mv -f "$tmp" "$file"
+}
+
+queue_has_similar_bugfix_task() {
+    local queue_file="$1" signature="$2"
+    [ -f "$queue_file" ] || return 1
+    grep -E '^\- \[( |→)\].*\| type: bugfix' "$queue_file" 2>/dev/null | grep -F "[test-fix:${signature}]" -q
+}
+
+auto_enqueue_test_fix_tasks() {
+    local window="$1" eval_json="$2"
+    local safe queue_file failures_json
+    local detected_count=0 enqueued_count=0 cooldown_skipped=0 duplicate_skipped=0
+    local target_list=""
+
+    safe=$(sanitize "$window")
+    [ -n "$safe" ] || safe="window"
+    queue_file="$HOME/.autopilot/task-queue/${safe}.md"
+    failures_json=$(extract_failed_tests_from_eval_json "$eval_json")
+    detected_count=$(echo "$failures_json" | jq -r '.cases | length' 2>/dev/null || echo 0)
+    detected_count=$(normalize_int "$detected_count")
+    if [ "$detected_count" -eq 0 ]; then
+        jq -n '{detected:0,enqueued:0,cooldown_skipped:0,duplicate_skipped:0,targets:[]}'
+        return 0
+    fi
+
+    while IFS= read -r case_item; do
+        [ -n "$case_item" ] || continue
+        local file_path error_text signature task_text
+        file_path=$(echo "$case_item" | jq -r '.file // ""' 2>/dev/null || echo "")
+        error_text=$(echo "$case_item" | jq -r '.error // ""' 2>/dev/null || echo "")
+        signature=$(echo "$case_item" | jq -r '.signature // ""' 2>/dev/null || echo "")
+        [ -n "$signature" ] || continue
+        [ -n "$file_path" ] || file_path="[unknown]"
+        [ -n "$error_text" ] || error_text="collect_rc!=0"
+
+        if is_test_fix_cooldown_active "$safe" "$signature" "$TEST_FIX_COOLDOWN_SECONDS"; then
+            cooldown_skipped=$((cooldown_skipped + 1))
+            continue
+        fi
+        if queue_has_similar_bugfix_task "$queue_file" "$signature"; then
+            duplicate_skipped=$((duplicate_skipped + 1))
+            continue
+        fi
+        if [ "$enqueued_count" -ge "$TEST_FIX_MAX_AUTO_ENQUEUE" ]; then
+            break
+        fi
+
+        task_text="修复测试失败: ${file_path}。错误摘要：${error_text}。请先复现失败用例，修复后运行相关测试并提交。 [test-fix:${signature}]"
+        if "$TASK_QUEUE" add "$safe" "$task_text" high --type bugfix >/dev/null 2>&1; then
+            enqueued_count=$((enqueued_count + 1))
+            mark_test_fix_cooldown "$safe" "$signature" "$TEST_FIX_COOLDOWN_SECONDS"
+            if [ -z "$target_list" ]; then
+                target_list="$file_path"
+            else
+                target_list="${target_list}, ${file_path}"
+            fi
+        fi
+    done < <(echo "$failures_json" | jq -c '.cases[]?' 2>/dev/null || true)
+
+    jq -n \
+        --arg detected "$detected_count" \
+        --arg enqueued "$enqueued_count" \
+        --arg cooldown_skipped "$cooldown_skipped" \
+        --arg duplicate_skipped "$duplicate_skipped" \
+        --arg targets "$target_list" \
+        '{
+            detected:($detected|tonumber),
+            enqueued:($enqueued|tonumber),
+            cooldown_skipped:($cooldown_skipped|tonumber),
+            duplicate_skipped:($duplicate_skipped|tonumber),
+            targets: ($targets | if . == "" then [] else split(", ") end)
+        }'
+}
+
 maybe_notify_evaluation_failure() {
     local window="$1" eval_json="$2"
-    local summary
+    local summary auto_enqueue_json auto_enqueued auto_cooldown auto_dup auto_targets
     summary=$(echo "$eval_json" | jq -r '
         [
           (.packages // [])[]
@@ -386,13 +610,25 @@ maybe_notify_evaluation_failure() {
         ] | join("; ")
     ' 2>/dev/null || echo "")
     if [ -n "$summary" ]; then
-        send_test_agent_notification "$window" "🧪 ${window}: 测试执行失败，检查 test-agent。${summary}"
+        auto_enqueue_json=$(auto_enqueue_test_fix_tasks "$window" "$eval_json")
+        auto_enqueued=$(echo "$auto_enqueue_json" | jq -r '.enqueued // 0' 2>/dev/null || echo 0)
+        auto_enqueued=$(normalize_int "$auto_enqueued")
+        auto_cooldown=$(echo "$auto_enqueue_json" | jq -r '.cooldown_skipped // 0' 2>/dev/null || echo 0)
+        auto_cooldown=$(normalize_int "$auto_cooldown")
+        auto_dup=$(echo "$auto_enqueue_json" | jq -r '.duplicate_skipped // 0' 2>/dev/null || echo 0)
+        auto_dup=$(normalize_int "$auto_dup")
+        auto_targets=$(echo "$auto_enqueue_json" | jq -r '[.targets[]?][0:3] | join(", ")' 2>/dev/null || echo "")
+        if [ "$auto_enqueued" -gt 0 ]; then
+            send_test_agent_notification "$window" "🧪 ${window}: 测试执行失败，已自动入队 ${auto_enqueued} 个 bugfix 任务。目标: ${auto_targets:-unknown}。${summary}"
+        else
+            send_test_agent_notification "$window" "🧪 ${window}: 测试执行失败（未自动入队：cooldown=${auto_cooldown}, duplicate=${auto_dup}）。${summary}"
+        fi
     fi
 }
 
 maybe_notify_enqueue_issues() {
     local window="$1" result_json="$2"
-    local failure_summary
+    local failure_summary eval_json auto_enqueue_json auto_enqueued auto_cooldown auto_dup auto_targets
     failure_summary=$(echo "$result_json" | jq -r '
         [
           (.evaluation.packages // [])[]
@@ -401,7 +637,20 @@ maybe_notify_enqueue_issues() {
         ] | join("; ")
     ' 2>/dev/null || echo "")
     if [ -n "$failure_summary" ]; then
-        send_test_agent_notification "$window" "🧪 ${window}: 测试执行失败，检查 test-agent。${failure_summary}"
+        eval_json=$(echo "$result_json" | jq -c '.evaluation // {}' 2>/dev/null || echo '{}')
+        auto_enqueue_json=$(auto_enqueue_test_fix_tasks "$window" "$eval_json")
+        auto_enqueued=$(echo "$auto_enqueue_json" | jq -r '.enqueued // 0' 2>/dev/null || echo 0)
+        auto_enqueued=$(normalize_int "$auto_enqueued")
+        auto_cooldown=$(echo "$auto_enqueue_json" | jq -r '.cooldown_skipped // 0' 2>/dev/null || echo 0)
+        auto_cooldown=$(normalize_int "$auto_cooldown")
+        auto_dup=$(echo "$auto_enqueue_json" | jq -r '.duplicate_skipped // 0' 2>/dev/null || echo 0)
+        auto_dup=$(normalize_int "$auto_dup")
+        auto_targets=$(echo "$auto_enqueue_json" | jq -r '[.targets[]?][0:3] | join(", ")' 2>/dev/null || echo "")
+        if [ "$auto_enqueued" -gt 0 ]; then
+            send_test_agent_notification "$window" "🧪 ${window}: 测试执行失败，已自动入队 ${auto_enqueued} 个 bugfix 任务。目标: ${auto_targets:-unknown}。${failure_summary}"
+        else
+            send_test_agent_notification "$window" "🧪 ${window}: 测试执行失败（未自动入队：cooldown=${auto_cooldown}, duplicate=${auto_dup}）。${failure_summary}"
+        fi
         return 0
     fi
 
