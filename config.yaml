@@ -105,6 +105,7 @@ discord_channels:
 # type=frontend/ui/h5 的队列任务会路由到 Gemini tmux 窗口
 gemini:
   default_window: "gemini-h5"   # 默认 Gemini tmux 窗口
+  model: "gemini-3.1-pro-preview"  # 强制锁 Pro，不允许降级到 Flash
   approval_mode: "yolo"         # yolo=全自动批准 | auto_edit=自动批文件写入 | default=手动确认
   project_windows:              # 项目特定映射（可选）
     youxin: "gemini-youxin"     # 有信前端 → 专用 Gemini 窗口
@@ -207,3 +208,12 @@ tmux_path: "/opt/homebrew/bin/tmux"
 log_dir: "/tmp/autopilot"
 log_max_size: 1048576        # 1MB
 log_keep: 2                  # 保留几份旧日志
+
+# Visual review agent (review-agent.sh)
+# Screenshots frontend pages after commit, sends to Claude vision for QA
+review_agent:
+  enabled: true
+  cooldown: 300              # 同项目两次 review 最小间隔 (秒)
+  min_lines: 10              # 最小改动行数才触发
+  fix_cooldown: 3600         # 自动入队修复任务冷却 (秒，防循环)
+  # model: claude-sonnet-4-20250514  # vision model (默认 sonnet 省钱)

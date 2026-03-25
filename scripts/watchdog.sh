@@ -1773,9 +1773,48 @@ check_new_commits() {
     maybe_trigger_test_agent_on_commit "$window" "$safe" "$project_dir" "$current_head"
     # PRD 引擎：按本次 commit 变更文件自动匹配并执行 checker
     run_prd_checks_for_commit "$window" "$safe" "$project_dir" "$last_head" "$current_head"
+    # Visual review agent: screenshot + Claude vision for frontend commits
+    maybe_trigger_review_agent "$window" "$safe" "$project_dir" "$current_head"
 
     # Layer 2 触发检查：commit 数达标且 idle 时，通知 cron 触发增量 review
     check_incremental_review_trigger "$window" "$safe" "$project_dir" "$count"
+}
+
+maybe_trigger_review_agent() {
+    local window="$1" safe="$2" project_dir="$3" current_head="$4"
+    local review_script="${SCRIPT_DIR}/review-agent.sh"
+    [ -x "$review_script" ] || return 0
+
+    # Check if this commit touches frontend files (quick pre-filter)
+    local changed_files frontend_files
+    changed_files=$(git -C "$project_dir" diff --name-only "${current_head}^..${current_head}" 2>/dev/null || echo "")
+    frontend_files=$(echo "$changed_files" | grep -E '\.(vue|tsx|jsx|html|css|scss|less|svelte)$' || true)
+    [ -n "$frontend_files" ] || return 0
+
+    local trigger_lock="${LOCK_DIR}/review-agent-${safe}.lock.d"
+    if [ -d "$trigger_lock" ]; then
+        local lock_age
+        lock_age=$(( $(now_ts) - $(file_mtime "$trigger_lock") ))
+        if [ "$lock_age" -gt 600 ]; then
+            rm -rf "$trigger_lock" 2>/dev/null || true
+        else
+            return 0
+        fi
+    fi
+    mkdir "$trigger_lock" 2>/dev/null || return 0
+
+    (
+        trap 'rm -rf "'"$trigger_lock"'"' EXIT
+        log "👁 ${window}: triggering visual review agent for ${current_head:0:7}"
+        "$review_script" "$project_dir" "$window" "$current_head" >> "${HOME}/.autopilot/logs/review-agent-${safe}.log" 2>&1
+        local rc=$?
+        case $rc in
+            0) log "✅ ${window}: visual review passed" ;;
+            1) log "❌ ${window}: visual review FAILED — fix task enqueued" ;;
+            3) log "⏭ ${window}: visual review skipped (no URL)" ;;
+            *) log "⚠️ ${window}: visual review error (rc=${rc})" ;;
+        esac
+    ) &
 }
 
 run_auto_checks() {
