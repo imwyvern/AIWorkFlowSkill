@@ -931,8 +931,11 @@ rotate_log() {
     local lines
     lines=$(wc -l < "$LOG" 2>/dev/null || echo 0)
     if [ "$lines" -gt 5000 ]; then
-        tail -2000 "$LOG" > "${LOG}.tmp" && mv -f "${LOG}.tmp" "$LOG"
-        log "📋 Log rotated (was ${lines} lines)"
+        # Archive instead of truncate: keep .1 and .2
+        [ -f "${LOG}.1" ] && mv -f "${LOG}.1" "${LOG}.2"
+        cp -f "$LOG" "${LOG}.1"
+        tail -500 "$LOG" > "${LOG}.tmp" && mv -f "${LOG}.tmp" "$LOG"
+        log "📋 Log rotated (was ${lines} lines, archived to .1)"
     fi
     # 回收后台僵尸进程（wait -n 需要 bash 4.3+，macOS 默认 3.2）
     wait 2>/dev/null || true

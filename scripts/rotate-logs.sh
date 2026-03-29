@@ -25,6 +25,10 @@ trim_if_oversized() {
         return 0
     fi
 
+    # Archive before truncating: keep 2 generations
+    [ -f "${file}.1" ] && mv -f "${file}.1" "${file}.2"
+    cp -f "$file" "${file}.1"
+
     local tmp
     tmp=$(mktemp "${file}.XXXXXX")
     tail -n "$KEEP_LINES" "$file" > "$tmp" 2>/dev/null || : > "$tmp"
