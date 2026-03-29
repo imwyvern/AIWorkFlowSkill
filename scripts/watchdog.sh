@@ -524,27 +524,41 @@ build_task_prompt_by_type() {
     local task_type
     task_type=$(printf '%s\n' "$task_type_raw" | tr '[:upper:]' '[:lower:]')
 
+    # Eval loop suffix — appended to all task types for self-verification
+    local eval_suffix
+    eval_suffix=$(cat <<'EVAL'
+
+[验证循环] 完成后必须自验证:
+1. 跑 build/lint/test，记录结果
+2. 如果有 fail → 分析原因 → 修复 → 重跑 → 重复直到全绿
+3. 每次迭代追加到 .codex/iteration-log.md:
+   - 当前时间、改了什么、验证结果、下一步计划
+4. 停止条件: build通过 + lint无新warning + test无新failure + 功能自测OK
+5. 每个改动单独commit，用 Conventional Commits 格式
+EVAL
+)
+
     case "$task_type" in
         ""|general|task)
-            printf '%s' "$task_desc"
+            printf '%s%s' "$task_desc" "$eval_suffix"
             ;;
         bugfix|bug|fix)
-            printf '任务类型: bugfix\n要求: 先复现并定位根因，再做最小修复；补充回归测试并自测通过。\n任务: %s' "$task_desc"
+            printf '任务类型: bugfix\n要求: 先复现并定位根因(记录hypothesis到.codex/iteration-log.md)，再做最小修复；补充回归测试。\n任务: %s%s' "$task_desc" "$eval_suffix"
             ;;
         feature|feat)
-            printf '任务类型: feature\n要求: 先给出最小可行实现方案（接口/数据/边界），再分步实现并补充测试。\n任务: %s' "$task_desc"
+            printf '任务类型: feature\n要求: 先给出最小可行实现方案（接口/数据/边界），再分步实现并补充测试。\n任务: %s%s' "$task_desc" "$eval_suffix"
             ;;
         refactor)
-            printf '任务类型: refactor\n要求: 不改变外部行为；重构后必须通过现有测试，并补充必要回归测试。\n任务: %s' "$task_desc"
+            printf '任务类型: refactor\n要求: 不改变外部行为；重构后必须通过现有测试，并补充必要回归测试。\n任务: %s%s' "$task_desc" "$eval_suffix"
             ;;
         review|review_fix)
-            printf '任务类型: review\n要求: 优先修复高优先级问题（P1/P2），修改后说明验证方式并提交。\n任务: %s' "$task_desc"
+            printf '任务类型: review\n要求: 优先修复高优先级问题（P1/P2），修改后说明验证方式并提交。\n任务: %s%s' "$task_desc" "$eval_suffix"
             ;;
         frontend|ui|h5)
-            printf '任务类型: frontend\n要求: 实现前端页面/组件/样式，确保响应式和交互状态覆盖（loading/empty/error/success），自查 Anti-AI-Slop 清单，design system 一致性。完成后自查：布局是否模板化？有没有通用渐变/3列grid？空状态有温度吗？间距有节奏感吗？\n任务: %s' "$task_desc"
+            printf '任务类型: frontend\n要求: 实现前端页面/组件/样式，确保响应式和交互状态覆盖（loading/empty/error/success），自查 Anti-AI-Slop 清单，design system 一致性。完成后自查：布局是否模板化？有没有通用渐变/3列grid？空状态有温度吗？间距有节奏感吗？\n任务: %s%s' "$task_desc" "$eval_suffix"
             ;;
         *)
-            printf '任务类型: %s\n任务: %s' "$task_type" "$task_desc"
+            printf '任务类型: %s\n任务: %s%s' "$task_type" "$task_desc" "$eval_suffix"
             ;;
     esac
 }
