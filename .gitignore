@@ -42,3 +42,4 @@ __pycache__/
 # Local config and review artifacts
 review-reports/
 review-screenshots/
+config.yaml
