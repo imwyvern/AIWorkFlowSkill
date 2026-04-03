@@ -38,3 +38,7 @@ tasks/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Local config and review artifacts
+review-reports/
+review-screenshots/
