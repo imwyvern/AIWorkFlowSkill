@@ -13,7 +13,7 @@
 
 </div>
 
-> 一套面向 AI 创业团队的完整开发工具链：**6 个开发流程 Skill** + **Codex Autopilot 多项目自动化引擎** + **OpenClaw 智能调度层**
+> 一套面向 AI 创业团队的完整开发工具链：**6 个开发流程 Skill** + **Codex Autopilot 多项目自动化引擎** + **OpenClaw / Hermes 智能调度层**
 
 ---
 
@@ -29,9 +29,9 @@
 
 多项目并行的 Codex CLI 自动化监控与任务编排系统，通过 tmux + launchd 实现 7×24 无人值守开发。
 
-### 3. OpenClaw 智能调度层
+### 3. OpenClaw / Hermes 智能调度层
 
-通过 [OpenClaw](https://github.com/openclaw/openclaw) 提供上层智能调度能力，包括 cron 定时任务、Claude sub-agent 代码审查、Telegram 消息通道、以及跨 AI 引擎的协同编排。
+通过 [OpenClaw](https://github.com/openclaw/openclaw) 提供上层智能调度能力，并兼容 Hermes 风格的 Agent 编排，包括 cron 定时任务、Claude sub-agent 代码审查、Telegram 消息通道、PR 跟进、工作区备份、以及跨 AI 引擎的协同编排。
 
 ---
 
@@ -161,6 +161,9 @@ Review CLEAN → Telegram 通知用户 "✅ 白屏 bug 已修复"
 | `scripts/autopilot-constants.sh` | ~50 | 状态常量定义（版本、状态字符串） |
 | `scripts/prd_verify_engine.py` | ~500 | PRD 验证引擎 — checker 插件系统，"proof of done" |
 | `scripts/codex-token-daily.py` | ~380 | Token 用量统计（从 Codex JSONL 会话提取） |
+| `scripts/watch-codex.sh` | ~30 | 监控 tmux 里的 Codex，会在 idle / approval / timeout 时退出 |
+| `scripts/pr-monitor.sh` | ~100 | 批量检查 PR 的 review/comment/merge 变化，驱动跟进和 CI 修复 |
+| `scripts/gitclaw-backup.sh` | ~30 | 将 GitClaw / OpenClaw 工作区文件备份到 GitHub 仓库 |
 
 ### 多模型任务路由（v0.6.0）
 
@@ -200,6 +203,34 @@ task-queue.sh add myproject "修复认证 API" high --type bugfix
 
 前端任务自动注入 Anti-AI-Slop prompt：布局检查、Design System 一致性、交互状态全覆盖（loading/empty/error/success）。
 前端任务当前不走 ACP，中转链路关闭，直接 tmux 持久 session 在现网更稳定。
+
+### 推荐的 Codex 全权限配置
+
+无人值守运行时，建议让 tmux 窗口里的 Codex 默认带 `--yolo`：
+
+```bash
+echo "alias codex='command codex --yolo'" >> ~/.zshrc
+source ~/.zshrc
+```
+
+如果你不想用 alias，也可以在 tmux 里直接执行 `command codex --yolo`。
+
+### PR 跟进、CI 修复与工作区备份
+
+```bash
+# 等待某个 Codex 会话重新回到 idle
+./scripts/watch-codex.sh autopilot:ProjectA 60
+
+# 检查上游 PR 是否有新 review/comment
+./scripts/pr-monitor.sh
+
+# 备份本地工作区记忆和配置到 GitHub
+./scripts/gitclaw-backup.sh
+```
+
+- `watch-codex.sh` 适合在派发任务后做轻量完成检测。
+- `pr-monitor.sh` 负责发现新的 review/评论/合并状态，便于 OpenClaw 或 Hermes agent 自动继续跟进。
+- `docs/HEARTBEAT.md` 提供一个真实使用中的 heartbeat 检查清单，可直接复用或改造。
 
 ### CI/CD: Test Agent
 
@@ -328,14 +359,18 @@ telegram:
   bot_token: "your-bot-token"
   chat_id: "your-chat-id"
 
-# 3. 创建 tmux session
-tmux new-session -s autopilot -n ProjectA
-# 在窗口中启动: codex --full-auto
+# 3. 推荐：让 Codex 默认带 `--yolo`
+echo "alias codex='command codex --yolo'" >> ~/.zshrc
+source ~/.zshrc
 
-# 4. 启动 watchdog
+# 4. 创建 tmux session
+tmux new-session -s autopilot -n ProjectA
+# 在窗口中启动: codex
+
+# 5. 启动 watchdog
 nohup bash scripts/watchdog.sh &
 
-# 5. (可选) 设置 cron 监控
+# 6. (可选) 设置 cron 监控
 # 每 10 分钟运行 monitor-all.sh
 */10 * * * * bash ~/.autopilot/scripts/monitor-all.sh
 ```
@@ -394,9 +429,15 @@ AIWorkFlowSkill/
 │   ├── tmux-send.sh             # 消息发送
 │   ├── monitor-all.sh           # 监控报告
 │   ├── task-queue.sh            # 任务队列
+│   ├── watch-codex.sh           # Codex 会话健康监控
+│   ├── pr-monitor.sh            # PR 跟进监控
+│   ├── gitclaw-backup.sh        # 工作区备份
 │   ├── consume-review-trigger.sh
 │   ├── prd_verify_engine.py     # PRD 验证
 │   └── ...
+│
+├── docs/
+│   └── HEARTBEAT.md             # 示例 heartbeat 检查清单
 │
 ├── watchdog-projects.conf       # 项目配置
 ├── config.yaml                  # Telegram 等配置
@@ -412,6 +453,7 @@ AIWorkFlowSkill/
 
 | 版本 | 日期 | 更新 |
 |------|------|------|
+| **0.8.0** | 2026-04-13 | 新增 GitClaw workspace backup、PR/review monitor、`watch-codex.sh`、`codex --yolo` 工作流文档、OpenClaw/Hermes 运维集成说明 |
 | **0.7.0** | 2026-03-24 | Test-agent 测试失败自动入队 bugfix 修复、discord-notify 重试、Gemini 以 tmux 作为主路径（不再 ACP 过渡） |
 | **0.6.0** | 2026-03-22 | 多模型路由（Gemini 前端 + Codex 后端）、Anti-AI-Slop prompt 注入、测试 Agent、分支隔离 |
 | **0.5.0** | 2026-03-03 | 智能 nudge（无任务不 nudge）、任务追踪通知、Discord 路由、队列并发锁/超时回收、review 退避、BFS 进程树检测 |

@@ -17,7 +17,7 @@ English · [中文](README_zh.md)
 
 ---
 
-A complete development toolchain for AI startup teams: **6 Development Workflow Skills** + **Codex Autopilot Multi-Project Engine** + **OpenClaw Intelligent Orchestration Layer**.
+A complete development toolchain for AI startup teams: **6 Development Workflow Skills** + **Codex Autopilot Multi-Project Engine** + **OpenClaw / Hermes Intelligent Orchestration Layer**.
 
 ## 🏗 System Overview
 
@@ -25,7 +25,7 @@ A complete development toolchain for AI startup teams: **6 Development Workflow 
 |--------|-------------|
 | **Workflow Skills** (v1.5.0) | 6 skills covering the full dev cycle — requirement research → doc writing → review → development → testing → code review |
 | **Codex Autopilot** | Multi-project 24/7 Codex CLI automation via tmux + launchd — status detection, smart nudge, task queue, auto-recovery |
-| **OpenClaw Layer** | Cron scheduling, Claude sub-agent reviews, Telegram/Discord channels, cross-engine orchestration |
+| **OpenClaw / Hermes Layer** | Cron scheduling, agent reviews, Telegram/Discord channels, PR follow-up, workspace backup orchestration |
 
 ## 📋 Development Workflow Skills
 
@@ -194,8 +194,41 @@ Codex idle
 | `test-agent.sh` | ~790 | Test/coverage orchestration, coverage-gap enqueue, and auto-enqueue bugfix tasks on test failures |
 | `consume-review-trigger.sh` | ~450 | Trigger-file code review consumer |
 | `discord-notify.sh` | ~180 | Project→channel notification mapping |
+| `watch-codex.sh` | ~30 | Watch a tmux Codex session until it is idle, stuck on approval, or timed out |
+| `pr-monitor.sh` | ~100 | Batch-monitor PR reviews/comments/merge events for follow-up and CI-fix routing |
+| `gitclaw-backup.sh` | ~30 | Snapshot GitClaw/OpenClaw workspace state to a backup GitHub repo |
 | `prd_verify_engine.py` | ~500 | PRD checker plugin system |
 | `codex-token-daily.py` | ~380 | Token usage from JSONL sessions |
+
+### Recommended Codex Alias
+
+For unattended Codex tmux sessions, the default production setup is full permissions:
+
+```bash
+echo "alias codex='command codex --yolo'" >> ~/.zshrc
+source ~/.zshrc
+```
+
+If you do not want a shell alias, invoke `command codex --yolo` explicitly inside the tmux window that Autopilot manages.
+
+### PR Follow-up, CI Fixes, and Workspace Backup
+
+Use the operational helpers below to close the loop around task dispatch:
+
+```bash
+# Wait until a dispatched Codex session is idle again
+./scripts/watch-codex.sh autopilot:ProjectA 60
+
+# Check whether upstream PRs received new reviews/comments
+./scripts/pr-monitor.sh
+
+# Snapshot local workspace files and memory to a GitHub backup repo
+./scripts/gitclaw-backup.sh
+```
+
+- `watch-codex.sh` is the lightweight tmux-side health check used after dispatch when you need an exact "idle again" signal.
+- `pr-monitor.sh` detects fresh review activity and merge/close events so OpenClaw or Hermes agents can enqueue follow-up or CI-fix tasks.
+- `docs/HEARTBEAT.md` is included as an example production heartbeat checklist for recurring PR follow-up, growth checks, and maintenance loops.
 
 <details>
 <summary>🛡 Safety Mechanisms</summary>
@@ -224,14 +257,18 @@ ProjectA:/path/to/project-a:Default nudge message
 EOF
 
 # 2. Configure Telegram (config.yaml)
-# 3. Create tmux session + start Codex
-tmux new-session -s autopilot -n ProjectA
-codex --full-auto
+# 3. Recommended: make Codex default to full permissions
+echo "alias codex='command codex --yolo'" >> ~/.zshrc
+source ~/.zshrc
 
-# 4. Start watchdog
+# 4. Create tmux session + start Codex
+tmux new-session -s autopilot -n ProjectA
+codex
+
+# 5. Start watchdog
 nohup bash scripts/watchdog.sh &
 
-# 5. Submit tasks
+# 6. Submit tasks
 bash scripts/task-queue.sh add myproject "Fix bug" high
 ```
 
@@ -260,7 +297,12 @@ AIWorkFlowSkill/
 │   ├── tmux-send.sh
 │   ├── monitor-all.sh
 │   ├── task-queue.sh
+│   ├── watch-codex.sh
+│   ├── pr-monitor.sh
+│   ├── gitclaw-backup.sh
 │   └── ...
+├── docs/
+│   └── HEARTBEAT.md
 ├── watchdog-projects.conf
 ├── config.yaml
 └── prd-items.yaml
@@ -272,6 +314,7 @@ AIWorkFlowSkill/
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **0.8.0** | 2026-04-13 | GitClaw workspace backup, PR/review monitor, `watch-codex.sh`, `codex --yolo` workflow docs, OpenClaw/Hermes ops hooks |
 | **0.7.0** | 2026-03-24 | Test-agent auto-enqueue bugfix on failure, discord-notify retry, Gemini tmux as primary (not ACP transition) |
 | **0.6.0** | 2026-03-22 | Multi-model routing (Gemini frontend + Codex backend), Anti-AI-Slop prompt, test agent, branch isolation |
 | **0.5.0** | 2026-03-03 | Smart nudge, task tracking, Discord routing, queue locks |
@@ -287,4 +330,4 @@ AIWorkFlowSkill/
 
 ## 🙏 Acknowledgments
 
-Built on [OpenClaw](https://github.com/openclaw/openclaw) and [Codex CLI](https://github.com/openai/codex).
+Built on [OpenClaw](https://github.com/openclaw/openclaw), Hermes-style orchestration patterns, and [Codex CLI](https://github.com/openai/codex).

@@ -1,10 +1,10 @@
 ---
 name: codex-autopilot
-version: 0.7.1
+version: 0.8.0
 description: |
-  Multi-model AI coding automation system with intelligent task routing and built-in CI/CD. Watchdog-driven loop that orchestrates Codex (backend) and Gemini (frontend) sessions in tmux, auto-routes tasks by type, manages context compaction, runs incremental code reviews, dispatches tasks from a priority queue, and includes a test-agent that auto-detects failures, enqueues fixes, and ratchets coverage.
-  Use when managing multiple concurrent AI coding sessions, automating development workflows, orchestrating parallel AI-assisted coding across projects, routing frontend vs backend tasks to different models, or running continuous testing with auto-fix.
-  Triggers: autopilot, watchdog, codex automation, tmux codex, multi-project codex, auto-nudge codex, codex session management, gemini frontend, multi-model routing, ai task routing, ci cd, test agent, coverage ratchet.
+  Multi-model AI coding automation system with intelligent task routing and built-in CI/CD. Watchdog-driven loop that orchestrates Codex (backend) and Gemini (frontend) sessions in tmux, auto-routes tasks by type, manages context compaction, runs incremental code reviews, dispatches tasks from a priority queue, and includes a test-agent that auto-detects failures, enqueues fixes, and ratchets coverage. v0.8.0 adds GitClaw workspace backup, PR/review monitoring, Codex session health monitoring via watch-codex.sh, and production-friendly OpenClaw/Hermes agent integration hooks. Recommended unattended Codex setup uses `codex --yolo`.
+  Use when managing multiple concurrent AI coding sessions, automating development workflows, orchestrating parallel AI-assisted coding across projects, routing frontend vs backend tasks to different models, tracking tmux Codex health, following up on upstream PR/CI activity, or running continuous testing with auto-fix.
+  Triggers: autopilot, watchdog, codex automation, tmux codex, multi-project codex, auto-nudge codex, codex session management, gemini frontend, multi-model routing, ai task routing, ci cd, test agent, coverage ratchet, gitclaw, workspace backup, pr monitor, ci fix, watch codex, codex health, hermes.
 ---
 
 # Codex Autopilot
@@ -13,7 +13,7 @@ Multi-model AI coding orchestration via tmux + launchd on macOS.
 
 ## Overview
 
-Codex Autopilot runs a watchdog loop that orchestrates multiple AI coding sessions in tmux. It features **intelligent task routing** — frontend tasks (UI, components, H5) are routed to Gemini CLI (1M context window, superior design aesthetics), while backend tasks (API, database, deployment) go to Codex CLI. The watchdog detects idle sessions, auto-nudges them, handles permission prompts, dispatches tasks from a priority queue, and sends notifications via Discord/Telegram.
+Codex Autopilot runs a watchdog loop that orchestrates multiple AI coding sessions in tmux. It features **intelligent task routing** — frontend tasks (UI, components, H5) are routed to Gemini CLI (1M context window, superior design aesthetics), while backend tasks (API, database, deployment) go to Codex CLI. The watchdog detects idle sessions, auto-nudges them, handles permission prompts, dispatches tasks from a priority queue, and sends notifications via Discord/Telegram. The same stack can be driven by an OpenClaw or Hermes-style orchestration layer for queue dispatch, PR follow-up, and workspace maintenance.
 
 ### Multi-Model Architecture
 
@@ -48,6 +48,17 @@ Install dependencies via Homebrew:
 ```bash
 brew install tmux yq jq
 ```
+
+### Recommended Codex Alias
+
+For unattended tmux sessions, the production default is a full-permission Codex invocation:
+
+```bash
+echo "alias codex='command codex --yolo'" >> ~/.zshrc
+source ~/.zshrc
+```
+
+If you prefer explicit invocation per session, use `command codex --yolo` directly instead of the alias.
 
 ### launchd Setup
 
@@ -124,13 +135,20 @@ commit → watchdog detects → test-agent evaluate
 |--------|---------|
 | `auto-nudge.sh` | Nudge logic for idle Codex sessions |
 | `auto-check.sh` | Periodic health check across all projects |
+| `watch-codex.sh` | Monitor a tmux Codex session until it returns to idle, needs approval, or times out |
+| `codex-monitor.sh` | Monitor long-running Codex rollout files and emit completion hints |
+| `poll-codex-done.sh` | Cron-friendly polling helper that notifies when a tracked Codex task finishes |
 | `permission-guard.sh` | Auto-approve or flag permission prompts |
 | `incremental-review.sh` | Run code review on recent changes |
 | `monitor-all.sh` | Dashboard: show status of all monitored projects |
+| `pr-monitor.sh` | Track new upstream reviews/comments/merge events to drive PR follow-up and CI fix dispatch |
 | `status-sync.sh` | Sync state to status.json for external consumption |
 | `rotate-logs.sh` | Log rotation and cleanup |
 | `cleanup-state.py` | Remove stale entries from state.json |
 | `claude-fallback.sh` | Fallback handler when Codex is unavailable |
+| `gitclaw-backup.sh` | Backup the local GitClaw/OpenClaw workspace files to a GitHub repo |
+| `track-mediaclaw-codex.sh` | Example project-specific tracker for a long-running Codex tmux window |
+| `xhs_monitor.py` | Playwright-based XiaoHongShu monitor used by heartbeat-style automation |
 | `prd-audit.sh` | Audit PRD completion status |
 | `prd-verify.sh` / `prd_verify_engine.py` | Verify PRD items against codebase |
 | `codex-token-daily.py` | Track daily token usage |
@@ -243,7 +261,22 @@ telegram:
 
 # Run the watchdog once (for testing)
 ./scripts/watchdog.sh
+
+# Watch a Codex session until it goes idle again
+./scripts/watch-codex.sh autopilot:my-project 60
+
+# Check whether upstream PRs need follow-up
+./scripts/pr-monitor.sh
+
+# Backup local workspace state to GitHub
+./scripts/gitclaw-backup.sh
 ```
+
+### PR Follow-up and Heartbeat Docs
+
+- `scripts/pr-monitor.sh` batches review/comment checks for upstream PRs and is designed to be called from cron, OpenClaw, or Hermes agents.
+- `scripts/watch-codex.sh` is the lightweight completion detector used after task dispatch when you need a reliable "notify me when idle again" primitive.
+- `docs/HEARTBEAT.md` contains a production heartbeat checklist for PR follow-up, skill updates, and other operational loops.
 
 ### Python Autopilot (Alternative)
 
@@ -262,7 +295,8 @@ python3 autopilot.py --daemon      # continuous loop
 ├── config.yaml.example      # Config template
 ├── scripts/                 # All automation scripts
 ├── projects/                # Per-project task definitions
-├── docs/                    # Additional documentation
+├── docs/                    # Additional documentation and heartbeat playbooks
+│   └── HEARTBEAT.md         # Example production heartbeat checklist
 ├── code-review/             # Code review templates
 ├── development/             # Development workflow templates
 ├── doc-review/              # Doc review templates
